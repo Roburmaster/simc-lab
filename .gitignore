@@ -1,0 +1,12 @@
+/vendor/
+/build/
+/runs/
+*.log
+data/engine.json
+data/upstream/
+/engine/
+/source/
+desktop/node_modules/
+desktop/dist/
+dist-test/
+*.err

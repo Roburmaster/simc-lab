@@ -1,0 +1,25 @@
+{
+  "name": "simc-lab",
+  "productName": "SimC Lab",
+  "version": "1.0.0",
+  "description": "Local SimulationCraft workbench with upgrade finder and tank simulation.",
+  "author": "Roburmaster",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "node build.mjs"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^44.4.2",
+    "electron-builder": "^26.15.3"
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Roburmaster/simc-lab.git"
+  }
+}

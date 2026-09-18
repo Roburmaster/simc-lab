@@ -1,0 +1,14 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const assert=require('node:assert/strict');
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
+ const page=await browser.newPage({viewport:{width:1500,height:1050}}),errors=[],requests=[],violations=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/wowhead|zamimg/.test(r.url()))requests.push(r.url());});page.on('console',m=>{if(m.text().includes('Content Security Policy'))violations.push(m.text());});
+ await page.goto('http://127.0.0.1:8642');await page.waitForSelector('#raid-preset');await page.click('#example');await page.waitForFunction(()=>!document.querySelector('#character').hidden);
+ const original=await page.locator('#profile').inputValue();await page.fill('#profile',original+'\n### Gear from Bags\n# Test ring\n# finger1=,id=251136,bonus_id=1/2,enchant_id=8021,gem_id=240908,ilevel=300\n# Saved Loadout: Test build\n# talents='+original.match(/^talents=(.+)$/m)[1]);await page.click('#import');await page.waitForFunction(()=>document.querySelector('#import-status').textContent.includes('ready'));
+ await page.click('[data-mode="compare"]');for(const name of ['Weapons','Armor','Jewelry & cloak','Trinkets','Saved talent builds'])assert.ok((await page.locator('.gear-category>summary').allTextContents()).some(t=>t.includes(name)));
+ const ring=page.locator('.gear-item a').filter({hasText:'Test ring'});assert.match(await ring.getAttribute('data-wowhead'),/bonus=1:2/);assert.match(await ring.getAttribute('data-wowhead'),/ench=8021/);await ring.hover();
+ await page.waitForTimeout(6000);console.log('Tooltip DOM:',await page.locator('.wowhead-tooltip,.wh-tooltip').count());console.log('Requests:',JSON.stringify(requests));console.log('CSP:',JSON.stringify(violations));
+ await page.locator('[data-add-imported="0"]').click();assert.match(await page.locator('[data-field="text"]').first().inputValue(),/id=251136/);
+ await page.locator('.catalog-tools summary').click();await page.selectOption('#gear-slot','finger1');await page.fill('#gear-query','Signet of Snarling');await page.click('#gear-search');await page.waitForSelector('[data-select-gear]');assert.ok(await page.locator('#gear-result-cards a[data-wowhead]').count());await page.click('#gear-add');assert.equal(await page.locator('.variant').count(),2);
+ await page.locator('#compare-panel').screenshot({path:'data/gear-categories.png'});await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);assert.deepEqual(violations,[]);
+ console.log('PASS: grouped gear/loadouts, item variant metadata, search cards, comparison actions, mobile and JavaScript.');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});
