@@ -32,11 +32,15 @@ jobs:
         run: npm run install-engine
       - name: Unit tests
         run: npm test
-      - name: Build and publish the installer
+      - name: Build the installer
         working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH: always
         run: |
           npm ci
           node build.mjs
+      # One upload of all three files: the installer, its blockmap (for small differential updates) and
+      # latest.yml, which installed apps read to find the new version.
+      - name: Publish the GitHub release
+        working-directory: desktop/dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" SimC-Lab-Setup.exe SimC-Lab-Setup.exe.blockmap latest.yml --verify-tag --title "SimC Lab ${{ github.ref_name }}" --generate-notes

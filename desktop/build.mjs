@@ -1,6 +1,6 @@
 // Builds the Windows installer: node build.mjs
-// The version comes from ../package.json. Releases are published to GitHub by the release workflow
-// (PUBLISH=always with GH_TOKEN); installed apps update from there. SIMC_LAB_UPDATE_URL and SIMC_LAB_DIST
+// The version comes from ../package.json. The release workflow uploads the build to GitHub Releases, where
+// installed apps look for updates. SIMC_LAB_UPDATE_URL and SIMC_LAB_DIST
 // make a test build that updates from a local folder served by serve-release.mjs instead.
 import fs from 'node:fs/promises';
 import path from 'node:path';
