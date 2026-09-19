@@ -77,9 +77,9 @@ test('profileset results and finalist selection use both uncertainties',()=>{
   const report={sim:{players:[{collected_data:{dps:{mean:1000,mean_std_dev:5}}}],profilesets:{results:[{name:'c001',mean:1010,mean_stddev:5},{name:'c002',mean:995,mean_stddev:5},{name:'c003',mean:950,mean_stddev:5}]}}};
   const screen=profilesetResults(report);
   assert.ok(screen.baseline.error95>9.7&&screen.baseline.error95<9.9);
-  const candidates=['c001','c002','c003'].map(key=>({key,slot:'head'}));
+  const candidates=['c001','c002','c003'].map(key=>({key,slot:'head',value:',id='+key}));
   assert.deepEqual(selectFinalists(candidates,screen,24).map(c=>c.key),['c001','c002']);
-  const many=Array.from({length:10},(_,i)=>({key:'r'+i,slot:i%2?'finger1':'finger2'}));
+  const many=Array.from({length:10},(_,i)=>({key:'r'+i,slot:i%2?'finger1':'finger2',value:',id='+i}));
   const rows={baseline:{dps:1,error95:0},rows:many.map((c,i)=>({key:c.key,dps:100-i,error95:0}))};
   assert.equal(selectFinalists(many,rows,24).length,4,'rings in both slots share one per-slot quota');
 });
@@ -90,4 +90,20 @@ test('raid drops follow boss order, the final-boss level and optional upgrades',
   assert.equal(raidDrop(myth,1,6).itemLevel,334);assert.equal(raidDrop(myth,3,2).itemLevel,324,'an upgrade never lowers a drop');
   assert.equal(raidDrop(myth,4,6).bonusId,13848,'final-boss drops already exceed the track');
   assert.equal(raidDrop({...myth,finalDrop:null},4).itemLevel,328);
+});
+
+test('only the better placement of a ring or trinket goes to the final round',()=>{
+  const candidates=[{key:'a',slot:'finger1',value:',id=7'},{key:'b',slot:'finger2',value:',id=7'},{key:'c',slot:'finger2',value:',id=8'}];
+  const screen={baseline:{dps:100,error95:0},rows:[{key:'a',dps:120,error95:0},{key:'b',dps:125,error95:0},{key:'c',dps:110,error95:0}]};
+  assert.deepEqual(selectFinalists(candidates,screen,24).map(c=>c.key),['b','c']);
+});
+
+test('SimC progress lines give the running step a fraction',async()=>{
+  const {parseProgress,jobFraction}=await import('../lib/engine.mjs');
+  assert.deepEqual(parseProgress('Generating Baseline: 1/1 [=====] 400/400 600'),{phase:'baseline',name:null,set:1,sets:1,iteration:400,iterations:400,fraction:1});
+  const p=parseProgress('Generating Baseline: 1/1 [==] 10/10\rGenerating Profileset: c057 58/117 [==>..] 1000/2000 287788.1 (1m 2s)');
+  assert.equal(p.name,'c057');assert.ok(Math.abs(p.fraction-57.5/117)<1e-9);
+  assert.equal(parseProgress('Simulating...'),null);
+  assert.equal(jobFraction({status:'running',done:1,total:3,progress:{fraction:0.5}}),0.5);
+  assert.equal(jobFraction({status:'queued',done:0,total:3}),0);
 });

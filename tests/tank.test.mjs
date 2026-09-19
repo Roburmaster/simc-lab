@@ -50,7 +50,7 @@ test('survival combines net damage and survived time; profilesets read fight len
 });
 
 test('tank finalists are chosen by score, not DPS',()=>{
-  const candidates=['a','b','c'].map(key=>({key,slot:'head'}));
+  const candidates=['a','b','c'].map(key=>({key,slot:'head',value:',id='+key}));
   const screen={baseline:{dps:100,error95:0},rows:[{key:'a',dps:130,score:-5,scoreError:1},{key:'b',dps:90,score:4,scoreError:1},{key:'c',dps:95,score:-0.5,scoreError:1}]};
   assert.deepEqual(selectFinalists(candidates,screen,24,{boss:{}}).map(c=>c.key),['b','c']);
   assert.deepEqual(selectFinalists(candidates,screen,24).map(c=>c.key),['a']);

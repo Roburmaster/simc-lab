@@ -4,6 +4,7 @@ import {featureUI} from '/features.js';
 import {upgradeUI} from '/upgrades.js';
 import {tankUI,signed} from '/tank.js';
 import {engineUI} from '/engine.js';
+import {activityUI,describeProgress,duration} from '/activity.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -53,14 +54,18 @@ function updateCount(){
 }
 $$('.settings input,.settings select,input[name=combine]').forEach(el=>el.addEventListener('change',updateCount));
 $('#run').addEventListener('click',async()=>{
-  try{notice('');$('#run').disabled=true;if(!profile||importedText!==$('#profile').value)await importProfile();const data=request();const preview=await api('/api/preview',data);$('#run-summary').textContent=`Starting ${preview.total} runs …`;const job=await api('/api/jobs',data);await watchJob(job.id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){notice(e.message);}finally{$('#run').disabled=false;updateCount();}
+  try{notice('');$('#run').disabled=true;if(!profile||importedText!==$('#profile').value)await importProfile();const data=request();const preview=await api('/api/preview',data);$('#run-summary').textContent=`Starting ${preview.total} runs …`;const job=await api('/api/jobs',data);activity.refresh();await watchJob(job.id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){notice(e.message);}finally{$('#run').disabled=false;updateCount();}
 });
 $('#cancel').addEventListener('click',async()=>{try{if(currentJob){await api(`/api/jobs/${currentJob}/cancel`,{});await poll();}}catch(e){notice(e.message);}});
+$('#job-progress').addEventListener('click',event=>{const id=event.target.closest('[data-watch-job]')?.dataset.watchJob;if(id)watchJob(id).catch(e=>notice(e.message));});
 async function watchJob(id){clearTimeout(pollTimer);currentJob=id;$('#results').hidden=false;await poll();}
 async function poll(){clearTimeout(pollTimer);try{const id=currentJob;const job=await api(`/api/jobs/${id}`);if(id!==currentJob)return;renderJob(job);if(['running','queued'].includes(job.status))pollTimer=setTimeout(poll,1200);}catch(e){notice(e.message);pollTimer=setTimeout(poll,3000);}}
 function renderJob(job){
-  $('#job-status').textContent=states[job.status]||job.status;$('#job-log').textContent=job.log || 'Waiting for the engine …';$('#cancel').hidden=!['running','queued'].includes(job.status);
-  $('#job-progress').innerHTML=`<div class="progress-description">${esc(job.name)} · ${job.done} / ${job.total} completed${job.current?`<br>${esc(job.current.name)} · ${esc(job.current.scenario.style)}, ${job.current.scenario.targets} targets`:''}${job.error?`<br>${esc(job.error)}`:''}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.round(100*job.done/job.total)}%"></div></div>`;
+  $('#job-status').textContent=states[job.status]||job.status;$('#job-log').textContent=job.log || (job.status==='queued'?'Waiting for earlier jobs to finish …':'Waiting for the engine …');$('#cancel').hidden=!['running','queued'].includes(job.status);
+  const waiting=job.queue?.ahead?.length?`<div class="queue-note">Waiting in the queue behind ${job.queue.ahead.length} job${job.queue.ahead.length===1?'':'s'}. Simulations run one at a time.${job.queue.ahead.map(j=>`<br>${esc(modes[j.mode]?.[0]||j.mode)} · ${esc(j.name)} · ${j.status==='running'?`running, ${j.done} / ${j.total}${j.current?' · '+esc(j.current):''}`:'queued'} <button class="text-button" data-watch-job="${esc(j.id)}">Show</button>`).join('')}</div>`:'';
+  const progress=describeProgress(job);const scenario=job.current?.scenario?` · ${esc(job.current.scenario.style)}, ${job.current.scenario.targets} target${job.current.scenario.targets===1?'':'s'}`:'';
+  const took=job.started&&job.finished?` · took ${duration((new Date(job.finished)-new Date(job.started))/1000)}`:'';
+  $('#job-progress').innerHTML=waiting+`<div class="progress-description"><strong>${esc(job.name)}</strong> · ${job.done} of ${job.total} steps done${scenario}${took}${progress.lines.map(l=>`<br>${l}`).join('')}${job.error?`<br>${esc(job.error)}`:''}</div><div class="progress-track${job.status==='running'?' live':''}"><div class="progress-fill" style="width:${Math.round(100*progress.fraction)}%"></div></div>`;
   let html=tank.summary(job)+features.results(job)+upgrades.results(job);
   if(job.settings.environment){const env=job.settings.environment;html+=`<details class="environment-detail"><summary>Environment used for this job</summary><p class="hint">External buffs: ${esc(Object.entries(env.buffs).filter(([,on])=>on).map(([key])=>key.replaceAll('_',' ')).join(', ')||'None')}<br>Bloodlust: ${env.buffs.bloodlust?esc(env.bloodlust.mode+' '+env.bloodlust.value):'No external override'} · Duration variation: ±${env.variation}%<br>Consumables: ${esc(Object.entries(env.consumables).map(([key,value])=>key.replaceAll('_',' ')+': '+value).join('; ')||'From profile / SimC')}</p></details>`;}
   for(let s=0;s<job.scenarios.length&&job.mode!=='upgrades';s++){
@@ -81,7 +86,7 @@ function renderJob(job){
   html+=`<p class="result-note">SimC ${esc(job.engine.version)} · WoW ${esc(job.engine.wowVersion)} · commit ${esc(job.engine.commit?.slice(0,12))}<br>${number(job.settings.iterations)} max iterations · target error ${job.settings.targetError} % · ${job.settings.threads} CPU threads <a href="/reports/${job.id}/request.json" download> · Download job settings</a></p>`;
   $('#result-content').innerHTML=html;
 }
-async function loadHistory(){const jobs=await api('/api/jobs');$('#history-list').innerHTML=jobs.length?jobs.map(j=>`<button class="history-row" data-job="${j.id}"><span><strong>${esc(j.name)}</strong><small>${esc(modes[j.mode]?.[0]||j.mode)} · ${new Date(j.created).toLocaleString('en-US')}</small></span><span class="pill">${esc(states[j.status]||j.status)} · ${j.done}/${j.total}</span></button>`).join(''):'<p class="empty-small">No simulations yet. Run Quick Sim, Enchant Lab or Talent Search to get started.</p>';}
+async function loadHistory(){const jobs=await api('/api/jobs');$('#history-list').innerHTML=jobs.length?jobs.map(j=>`<button class="history-row" data-job="${j.id}"><span><strong>${esc(j.name)}</strong><small>${esc(modes[j.mode]?.[0]||j.mode)} · ${new Date(j.created).toLocaleString('en-US')}</small></span><span class="history-state"><span class="pill">${esc(states[j.status]||j.status)} · ${j.done}/${j.total}</span>${j.status==='running'?`<span class="history-track"><span style="width:${Math.round(100*(j.fraction||0))}%"></span></span>`:''}</span></button>`).join(''):'<p class="empty-small">No simulations yet. Run Quick Sim, Enchant Lab or Talent Search to get started.</p>';}
 $('#refresh-history').addEventListener('click',()=>loadHistory().catch(e=>notice(e.message)));
 $('#history-list').addEventListener('click',async event=>{const id=event.target.closest('[data-job]')?.dataset.job;if(id){await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth'});}});
 async function init(){
@@ -106,6 +111,7 @@ const features=featureUI({api,getProfile:()=>profile,notice,updateCount,addVaria
 
 const upgrades=upgradeUI({api,notice,updateCount});
 const engineView=engineUI({api,notice});
+const activity=activityUI({api,openJob:async id=>{if(mode==='history')await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});},onChange:()=>{if(mode==='history')loadHistory().catch(()=>{});}});
 const tank=tankUI({updateCount});
 const environment=environmentUI({api,notice,addVariant:v=>{if(variants.length===1&&!variants[0].text)variants=[];variants.push(v);renderVariants();updateCount();}});
 $('#enchant-slots').addEventListener('click',e=>{const slot=e.target.dataset.clearEnchants;if(slot){selections[slot]=[];renderEnchants();updateCount();}});
