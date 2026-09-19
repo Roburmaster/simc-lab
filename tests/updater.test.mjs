@@ -39,3 +39,16 @@ test('up to date, data-only and forced source updates',()=>{
   const data=plan({...args,local:current,live:live('12.1.0.69814','h2')});assert.equal(data.action,'data');assert.equal(data.engine,null);
   assert.equal(plan({...args,local:current,live:live('12.1.0.69814'),mode:'source'}).engine.kind,'source');
 });
+
+test('a newer source commit for the same WoW build never triggers a compile',()=>{
+  const p=plan({installedWow:'12.1.0.69875',local:{},head:head('newer','12.1.0.69875'),nightly:nightly('older','12.1.0.69875'),live:live('12.1.0.69875')});
+  assert.equal(p.action,'nightly');assert.equal(p.engine.sha,'older');
+});
+
+test('an installed engine for the current WoW build is kept, even a source build newer than the nightly',()=>{
+  const local={commit:'mine',wowVersion:'12.1.0.69875',dataHash:'h1'};
+  const args={installedWow:'12.1.0.69875',head:head('newer','12.1.0.69875'),nightly:nightly('older','12.1.0.69875')};
+  assert.equal(plan({...args,local,live:live('12.1.0.69875','h1')}).action,'none');
+  assert.equal(plan({...args,local,live:live('12.1.0.69875','h2')}).action,'data');
+  assert.equal(plan({...args,local:{...local,wowVersion:'12.1.0.69814'},live:live('12.1.0.69875')}).action,'nightly','a WoW patch replaces the engine');
+});
