@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - name: Test dependencies (Lua parser and VM for the addon tests)
+        run: npm ci
       - name: Install SimC and game data (the app's own updater)
         run: npm run install-engine
       - name: Unit tests

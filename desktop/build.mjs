@@ -25,8 +25,9 @@ await build({
     copyright:'Copyright © Roburmaster. GPL-3.0-or-later.',
     directories:{output,buildResources:'build'},
     files:['main.cjs','preload.cjs','package.json','build/icon.png'],
-    // The server runs as plain Node files next to the app, not inside the asar archive.
-    extraResources:[{from:root,to:'server',filter:['server.mjs','package.json','lib/**/*','public/**/*']},{from:path.join(root,'LICENSE'),to:'LICENSE'}],
+    // The server runs as plain Node files next to the app, not inside the asar archive. The WoW addon ships
+    // beside it, so every app update carries the matching addon.
+    extraResources:[{from:root,to:'server',filter:['server.mjs','package.json','lib/**/*','public/**/*','addon/SimCLab/**/*']},{from:path.join(root,'LICENSE'),to:'LICENSE'}],
     // A fixed file name gives the website a download link that always points at the newest release.
     win:{icon:'build/icon.ico',artifactName:'SimC-Lab-Setup.${ext}'},
     nsis:{installerIcon:'build/icon.ico',uninstallerIcon:'build/icon.ico',license:path.join(root,'LICENSE'),oneClick:false,perMachine:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'SimC Lab',deleteAppDataOnUninstall:false},

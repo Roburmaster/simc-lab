@@ -1,6 +1,6 @@
 # SimC Lab
 
-A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC.
+A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
 
 **Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
 
@@ -42,6 +42,27 @@ The season is read from the pinned client data: its bonus-roll group names the r
 Candidates are filtered for your class and specialization: allowed classes, loot specialization, armor type, weapon proficiency, shields and primary stat. Each item is placed in every slot it fits. Rings and trinkets are tried in both slots, and a unique-equipped item never goes next to its own copy. Weapons are compared like for like with what you wield: a two-hander replaces a two-hander, and a one-hander replaces a one-hander. Titan's Grip allows both. Your enchant carries over, and existing gems carry over into sockets the new item already has. Vault sockets and embellishments are not added.
 
 Each scenario runs in two SimC profileset runs. Screening simulates every candidate with at most 2,000 iterations and a 0.5% target error. Candidates whose screened DPS could beat the current gear within the combined uncertainty then go to a final round with your iteration and target-error settings. The final round takes up to 24, 48 or 96 candidates, with a quota per slot. Results show the best upgrade per boss, dungeon or source, every measured upgrade, and screening results that were not simulated again. Screening-only numbers are labelled. A search is limited to 800 candidates. Some crafted pieces require the matching profession to equip, and the data does not say which ones.
+
+## WoW addon (SimCLab)
+
+SimC Lab ships a World of Warcraft addon, SimCLab (`addon/SimCLab`), and installs it for you. It shows your sims in the game:
+
+- **Results window** (`/simclab`): the latest sims per character and specialization, with scenario, date, baseline DPS and the top upgrades, talent builds (click to copy the talent string) or Gear Compare variants. A sim is marked **stale** as soon as your equipped gear no longer matches the gear it was simulated with (another item, another upgrade level, enchant or gems); hover the warning to see which slots changed.
+- **Gear farm** (`/simclab farm`): the positive results of the latest Upgrade Finder sim, grouped by source (raid boss, dungeon, Great Vault row, delves, crafted) and ranked by gain, with a checklist of what is still missing. Items in your bags or equipped at the simulated item level count as done; tick others by hand. The farm for the instance or boss on display also appears beside the Encounter Journal, and entering a dungeon or raid with something to farm shows a short notice.
+- **Item tooltips**: "SimC Lab: +2.31% (Myth 1/6, Heroic Ula'tek)" on every item in your results for the logged-in character and specialization, matched on item ID and the upgrade track and level read from the item's bonus IDs, or its item level. Tanks see the DPS and survival score. A result from another upgrade level is labelled as such.
+- **Great Vault and loot rolls**: when the vault or a group loot roll shows items from your results, the best choice gets a green border and every known item its simulated gain. Upgrades in a loot roll are also announced in chat.
+
+Each feature can be switched off with `/simclab tooltip|entrance|journal|vault|loot off`.
+
+**Installing and updating.** Open **WoW addon** in the app. It finds the AddOns folder through the same registry entry that supplies your WoW build (or `SIMC_LAB_WOW_DIR`, pointing at a `_retail_` folder), shows the installed and shipped addon versions, and installs the copy that ships inside the app. When the app updates and the addon it ships is newer, an installed addon is updated on the next start. SimC Lab writes only inside `InterfaceAddOnsSimCLab`, never touches other addons, writes every file as a temporary file followed by a rename, and refuses to write if the SimCLab folder is a link to another location.
+
+**Sending results.** Upgrade Finder, Talent Search and Gear Compare results have a **Send to WoW** button, and the WoW addon panel can send them automatically after every finished job. The app keeps what was sent in `%LOCALAPPDATA%SimC Labwowstore.json` and regenerates `Data.lua` from it: data is keyed by character-realm and specialization, and the last 5 sims per key are kept (1–10, configurable). Then type `/reload` in the game: addons have no network or file access, so `Data.lua` is read only at login or `/reload`.
+
+**Data format.** `Data.lua` assigns one Lua table to the addon's private namespace. It carries `schemaVersion` (currently 1), which the addon checks before using anything; a newer or older schema is refused with a message, and entries of the wrong shape are dropped rather than trusted. The table holds the generation time, the app version, the upgrade tracks by bonus ID, and per character and specialization the sims: mode, date, SimC and WoW versions, settings (iterations, target error, duration, season, tank preset), the baseline gear, and per scenario the baseline DPS and the results with item ID, bonus IDs, slot, item level, gain, score, error, and sources with journal instance and encounter IDs. Every string is escaped for Lua (quotes, backslashes, control characters as three-digit escapes), and names are shown with WoW's markup escaped. The file is capped at 1.5 MB: the oldest sims are dropped first, and each scenario keeps at most 60 item results or 20 builds or variants.
+
+**Import without copy-paste.** With the official SimulationCraft addon installed, SimCLab stores that addon's own `/simc` export in its SavedVariables at every logout and `/reload` (or right away with `/simclab capture`, followed by `/reload`). **Import from WoW** in the Character panel reads it from `WTFAccount<account>SavedVariablesSimCLab.lua` and verifies the export's checksum. SimCLab deliberately does not build its own export: the SimulationCraft addon is updated with every patch for new gear, talent, upgrade and crafting systems, and a second exporter would drift from it. The SavedVariables file is parsed as data only, never executed, and the profile goes through the normal import checks. Turn the capture off with `/simclab capture off`.
+
+**MPCombat.** SimCLab stands alone and has no dependencies. It does not integrate with MPCombat; that could be offered later as an optional extra on MPCombat's side.
 
 ## Tank simulation
 
@@ -110,12 +131,13 @@ Stop the server before updating. From this directory:
     node scripts/refresh-data.mjs
     npm start
 
-Requirements: Node.js 22+, Git, CMake, Visual Studio 2026 C++ tools and Windows SDK. No npm package installation is required for the app. The build and data refresh both reject mismatching live builds. Restart after updating. Data refresh caches immutable content-hash URLs from Raidbots; profiles are never sent to that service.
+Requirements: Node.js 22+, Git, CMake, Visual Studio 2026 C++ tools and Windows SDK. No npm package installation is required for the app; the tests need `npm ci` once for the Lua parser and Lua VM. The build and data refresh both reject mismatching live builds. Restart after updating. Data refresh caches immutable content-hash URLs from Raidbots; profiles are never sent to that service.
 
 The default WoW build file is C:\Program Files (x86)\World of Warcraft\.build.info. Set WOW_BUILD_INFO for a different location. If the local installation cannot be read, the interface reports the version as unknown; a readable addon version is still checked.
 
 ## Tests
 
+    npm ci
     npm test
     node tests/integration.mjs
     node tests/upgrade-integration.mjs
@@ -123,6 +145,8 @@ The default WoW build file is C:\Program Files (x86)\World of Warcraft\.build.in
     node tests/english-browser.cjs
 
 Integration and browser tests require the running server and built engine. Browser tests use Microsoft Edge and Playwright from the local Codex runtime; adjust the import path on another machine. Tests create example jobs in History. They cover profile parsing, expansion rejection, legal talent generation, point budgets, locks, exports, actual simulations, cancellation, reports and responsive English UI.
+
+The WoW addon has its own tests in `npm test`: the Data.lua writer (escaping, a round trip through a Lua 5.1 parser and a real Lua VM, size limits), installation into a temporary AddOns folder (other addons untouched, links refused), the SavedVariables reader, and the addon itself. `tests/addon/check-lua51.mjs` parses every file in the addon's TOC as Lua 5.1, and `tests/addon/world.mjs` loads the addon into a Lua VM (wasmoon) on top of a WoW API mock (`tests/addon/wowmock.lua`) to drive tooltips, stale marking, the farm, the Encounter Journal and entrance panels, the Great Vault, loot rolls and the SimulationCraft capture.
 
 ## Sources
 

@@ -10,3 +10,4 @@ desktop/node_modules/
 desktop/dist/
 dist-test/
 *.err
+/node_modules/
