@@ -1,5 +1,4 @@
 {
-  "updateUrl": "https://downloads.mythicpersona.com/simc-lab/",
-  "bucket": "mythicpersona-downloads",
-  "prefix": "simc-lab/"
+  "owner": "Roburmaster",
+  "repo": "simc-lab"
 }
