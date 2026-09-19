@@ -113,9 +113,11 @@ The app itself updates through electron-updater: it checks at start and every si
 
 ### Releasing
 
+GitHub CI and releases never install or compile SimC. The app installs it locally on the user's PC.
+
 1. Raise `version` in package.json and merge that change to main.
 2. Create the matching tag: `git tag v1.2.3 && git push origin v1.2.3`.
-3. The Release workflow checks that the tag matches package.json, installs SimC, runs the tests, builds the installer and, after the owner approves the release environment, publishes SimC-Lab-Setup.exe, its blockmap and latest.yml to GitHub Releases.
+3. The Release workflow checks that the tag matches package.json, runs the standalone app and addon tests with `npm run test:ci`, builds the installer and, after the owner approves the release environment, publishes SimC-Lab-Setup.exe, its blockmap and latest.yml to GitHub Releases.
 
 Installed apps read latest.yml from the newest GitHub release. The installer keeps the fixed name SimC-Lab-Setup.exe, so /releases/latest/download/SimC-Lab-Setup.exe always serves the newest version. `cd desktop && node build.mjs` builds locally without publishing; with SIMC_LAB_UPDATE_URL and SIMC_LAB_DIST set, it makes a test build that updates from a folder served by serve-release.mjs.
 

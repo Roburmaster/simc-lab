@@ -27,10 +27,9 @@ jobs:
           node-version: 24
       - name: Test dependencies (Lua parser and VM for the addon tests)
         run: npm ci
-      - name: Install SimC and game data (the app's own updater)
-        run: npm run install-engine
-      - name: Unit tests
-        run: npm test
+      # SimC installation and live-data tests run locally on the user's PC.
+      - name: App and addon tests (no SimC installation)
+        run: npm run test:ci
       - name: Installer builds
         working-directory: desktop
         run: |

@@ -30,10 +30,9 @@ jobs:
           test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
       - name: Test dependencies (Lua parser and VM for the addon tests)
         run: npm ci
-      - name: Install SimC and game data
-        run: npm run install-engine
-      - name: Unit tests
-        run: npm test
+      # SimC installation and live-data tests run locally on the user's PC.
+      - name: App and addon tests (no SimC installation)
+        run: npm run test:ci
       - name: Build the installer
         working-directory: desktop
         run: |

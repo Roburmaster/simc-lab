@@ -1,5 +1,6 @@
 param([switch]$Update, [int]$Parallel = 6)
 $ErrorActionPreference = 'Stop'
+if ($env:GITHUB_ACTIONS -eq 'true') { throw 'SimC builds run locally on the user''s PC, not in GitHub Actions.' }
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $sourceDir = Join-Path $projectRoot 'vendor\simc'
 $buildDir = Join-Path $projectRoot 'build'
