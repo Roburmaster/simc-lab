@@ -20,14 +20,22 @@ export function wowUI({api,notice,importText}){
     // One button decides whether the addon is installed at all; while it is, the app keeps it up to date.
     const install=!s.found?'':s.linked?'<p class="notice">The SimCLab folder in AddOns is a link to another location. SimC Lab only writes into a real folder, so remove the link to install from here.</p>'
       :!s.installed?`<button class="button small primary" data-wow-install>Install addon</button><p class="hint">It goes into Interface\\AddOns\\SimCLab, and SimC Lab keeps it up to date from then on.</p>`
-      :`<div class="wow-buttons">${s.updateAvailable?`<button class="button small primary" data-wow-install>Update to ${esc(s.shipped)}</button>`:`<button class="button small secondary" data-wow-install>Reinstall</button>`}<button class="button small wow-remove" data-wow-uninstall>Remove addon</button></div>
-        <p class="hint">${s.manage?`Kept up to date automatically: a newer addon is installed when SimC Lab starts.${s.updateAvailable?' This one is waiting for a restart, or press the button now.':''}`:'Automatic updates are off for this addon. Press Reinstall to let SimC Lab keep it up to date again.'}</p>`;
+      // A waiting update comes either from the app's own copy or from the addon's own release on GitHub.
+      :`<div class="wow-buttons">${s.updateAvailable
+          ?`<button class="button small primary" ${s.fromGitHub?'data-wow-addon-update':'data-wow-install'}>Update to ${esc(s.newest)}</button>`
+          :`<button class="button small secondary" data-wow-install>Reinstall</button>`}<button class="button small wow-remove" data-wow-uninstall>Remove addon</button></div>
+        <p class="hint">${s.manage?`Kept up to date automatically: a newer addon is installed when SimC Lab starts.${s.updateAvailable?` Version ${esc(s.newest)} is waiting${s.fromGitHub?' as its own release':''} — press the button to take it now.`:''}`:'Automatic updates are off for this addon. Press Reinstall to let SimC Lab keep it up to date again.'}</p>`;
     const last=s.last?`<p class="hint">${s.last.error?`Automatic send failed: ${esc(s.last.error)}`:`Last sent ${new Date(s.last.time).toLocaleTimeString('en-GB')}: ${esc(s.last.name)} · ${esc(s.last.spec)}${s.last.auto?' (automatic)':''}${s.last.written?'. Type /reload in the game.':'. Install the addon to use it in the game.'}`}</p>`:'';
     $('#wow-status').innerHTML=`<div class="wow-grid">
       <div><span class="field-label">ADDONS FOLDER</span><strong class="wow-path">${esc(s.addons||'Not found')}</strong>${s.found?'':'<p class="hint">World of Warcraft was not found in the registry or the default folders. Install the game, or set SIMC_LAB_WOW_DIR to its _retail_ folder.</p>'}</div>
       <div><span class="field-label">ADDON VERSION</span><strong>${s.installed?`Installed ${esc(s.installed)}`:'Not installed'}</strong><p class="hint">Shipped with this app: ${esc(s.shipped||'none')}${s.updateAvailable?' · update available':''}</p>${install}</div>
     </div>
     <div class="divider"></div>
+    <label class="check"><input type="checkbox" id="wow-online" ${s.settings.online?'checked':''}> Look for addon updates on GitHub, so a fix for the game needs no new app version</label>
+    <p class="hint wow-online-hint">${s.online?.error?`Last check: ${esc(s.online.error)}`
+      :s.online?.version?`The addon's own release is ${esc(s.online.version)}${s.online.tag?` (${esc(s.online.tag)})`:''}, checked ${esc(when(Math.floor(s.online.checked/1000)))}.`
+      :s.settings.online?'Checked when SimC Lab starts. Only an addon built for this app\'s data format is installed.':'SimC Lab will only use the addon that came with it.'}
+      <button class="text-button" data-wow-addon-check>Check now</button></p>
     <label class="check"><input type="checkbox" id="wow-auto" ${s.settings.autoSend?'checked':''}> Send to WoW automatically after each Upgrade Finder, Talent Search and Gear Compare job</label>
     <div class="two-col wow-keep"><label>Sims kept per character and specialization<select id="wow-keep">${Array.from({length:s.limits.keep[1]-s.limits.keep[0]+1},(_,i)=>i+s.limits.keep[0]).map(n=>`<option value="${n}" ${n===s.settings.keep?'selected':''}>${n}</option>`).join('')}</select></label></div>
     ${last}
@@ -49,11 +57,14 @@ export function wowUI({api,notice,importText}){
   $('#wow-panel').addEventListener('click',e=>{
     if(e.target.closest('#wow-refresh'))refresh();
     if(e.target.closest('[data-wow-install]'))act(()=>api('/api/wow/install',{}));
+    if(e.target.closest('[data-wow-addon-check]'))act(()=>api('/api/wow/addon-check',{}));
+    if(e.target.closest('[data-wow-addon-update]'))act(()=>api('/api/wow/addon-update',{}));
     const uninstall=e.target.closest('[data-wow-uninstall]');if(uninstall)armRemove(uninstall);
     const id=e.target.closest('[data-wow-remove]')?.dataset.wowRemove;if(id)act(()=>api('/api/wow/remove',{id}));
   });
   $('#wow-panel').addEventListener('change',e=>{
     if(e.target.id==='wow-auto')act(()=>api('/api/wow/settings',{autoSend:e.target.checked}));
+    if(e.target.id==='wow-online')act(()=>api('/api/wow/settings',{online:e.target.checked}));
     if(e.target.id==='wow-keep')act(()=>api('/api/wow/settings',{keep:Number(e.target.value)}));
   });
 
