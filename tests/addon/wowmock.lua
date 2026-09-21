@@ -205,3 +205,45 @@ for i = 1, 4 do
   local f = newWidget("Frame", "GroupLootFrame" .. i)
   f.__shown = false
 end
+
+-- Extra APIs the addon's own /simc export reads.
+__mock.player.race = "Draenei"
+__mock.player.role = "TANK"
+__mock.professions = { [1] = { "Herbalism", 9 }, [2] = { "Enchanting", 64 } }
+__mock.traits = {
+  activeConfig = 1,
+  strings = { [1] = "CoPAkXBWactive", [7] = "CoPAkXBWsaved" },
+  configs = { [1] = { name = "Main", treeIDs = { 1 } }, [7] = { name = "M+ build", treeIDs = { 1 } }, [48] = { name = "Omnium", treeIDs = { 9 } } },
+  nodes = { [9] = { { entryID = 1234, rank = 2 }, { entryID = 1235, rank = 1 } } },
+  specConfigs = { 1, 7 },
+}
+function UnitRace() return __mock.player.race, __mock.player.race end
+function GetCurrentRegionName() return "EU" end
+function GetCurrentRegion() return 3 end
+function GetSpecializationRole() return __mock.player.role end
+function GetProfessions() return 1, 2 end
+function GetProfessionInfo(id)
+  local p = __mock.professions[id]
+  if p then return p[1], nil, p[2] end
+end
+C_ClassTalents = {
+  GetActiveConfigID = function() return __mock.traits.activeConfig end,
+  GetConfigIDsBySpecID = function() return __mock.traits.specConfigs end,
+}
+C_Traits = {
+  GenerateImportString = function(id) return __mock.traits.strings[id] end,
+  GetConfigIDBySystemID = function(system) return system == 48 and 48 or nil end,
+  GetConfigInfo = function(id) return __mock.traits.configs[id] end,
+  GetTreeNodes = function(tree) return __mock.traits.nodes[tree] and { 1, 2 } or {} end,
+  GetNodeInfo = function(config, node)
+    local list = __mock.traits.nodes[9]
+    local entry = list and list[node]
+    if entry then return { ranksPurchased = entry.rank, activeEntry = entry } end
+    return {}
+  end,
+}
+C_TradeSkillUI = { GetItemCraftedQualityByItemInfo = function(link) return __mock.craftedQuality and __mock.craftedQuality[link] end }
+C_Item.GetItemInfoInstant = function(link)
+  local id = tonumber(tostring(link):match("item:(%d+)"))
+  return id, nil, nil, __mock.equipLoc and __mock.equipLoc[id] or "INVTYPE_FINGER"
+end

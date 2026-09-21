@@ -70,3 +70,5 @@
 .wow-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .wow-remove{background:#3a2730;border-color:#7a4a58;color:#f0b9c2}
 .wow-remove:hover{background:#4a3039}
+
+.wow-characters{margin-bottom:16px}.wow-characters .field-label{margin-top:0}.wow-character-row{display:flex;gap:8px;align-items:center}.wow-character-row select{flex:1}.wow-characters .hint{margin:8px 0 0}

@@ -146,7 +146,19 @@ test('captured exports are read from every account and checked against their che
   }
   await fs.mkdir(path.join(retail,'WTF','Account','BROKEN','SavedVariables'),{recursive:true});
   await fs.writeFile(path.join(retail,'WTF','Account','BROKEN','SavedVariables','SimCLab.lua'),'SimCLabDB = { os.exit() }');
-  const list=await addon().captures();
-  assert.deepEqual(list.map(c=>[c.account,c.name,c.time,c.checksum]),[['ACCOUNT2','Temulan',200,true],['ACCOUNT1','Temulan',100,true]],'newest first; the broken file is skipped');
-  assert.equal(list[0].text,text);
+  const {characters,problems}=await addon().captures();
+  assert.deepEqual(characters.map(c=>[c.account,c.name,c.time,c.checksum,c.source]),[['ACCOUNT2','Temulan',200,true,'SimulationCraft addon']],
+    'one row per character: the newest capture wins, and the file that is not data is skipped');
+  assert.equal(characters[0].text,text);
+  assert.deepEqual(problems,[]);
+});
+
+test('a character the game could not export says why it is missing',async()=>{
+  const dir=path.join(retail,'WTF','Account','ACCOUNT3','SavedVariables');
+  await fs.mkdir(dir,{recursive:true});
+  await fs.writeFile(path.join(dir,'SimCLab.lua'),'\nSimCLabDB = {\n["captures"] = {\n},\n["captureStatus"] = {\n["ok"] = false,\n["reason"] = "the SimulationCraft addon is not installed or not enabled",\n["time"] = 300,\n["name"] = "Temulan",\n},\n}\n');
+  try{
+    const {problems}=await addon().captures();
+    assert.deepEqual(problems.map(p=>[p.account,p.name,p.reason]),[['ACCOUNT3','Temulan','the SimulationCraft addon is not installed or not enabled']]);
+  }finally{await fs.rm(path.join(retail,'WTF','Account','ACCOUNT3'),{recursive:true,force:true});}
 });

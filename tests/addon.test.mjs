@@ -8,6 +8,7 @@ import path from 'node:path';
 import {checkAddon,checkSource} from './addon/check-lua51.mjs';
 import {world,addonDir} from './addon/world.mjs';
 import {identity,simEntry,trackTable,addSim,dataFile} from '../lib/wowdata.mjs';
+import {checksumOk} from '../lib/wowaddon.mjs';
 import {season,profile,talentData,upgradeJob,request} from './addon/fixture.mjs';
 
 const tracks=trackTable(season);
@@ -37,7 +38,7 @@ const markOn=(w,frame)=>w.get(`(function() for _, f in ipairs(__mock.frames) do 
 test('every file in the TOC is Lua 5.1, and the folder holds only what the game loads',async()=>{
   const {files,problems}=await checkAddon(addonDir);
   assert.deepEqual(problems,[]);
-  assert.deepEqual(files,['Data.lua','Core.lua','Gear.lua','UI/Widgets.lua','UI/Window.lua','UI/Journal.lua','UI/Tooltip.lua','UI/Loot.lua']);
+  assert.deepEqual(files,['Data.lua','Core.lua','Gear.lua','Export.lua','UI/Widgets.lua','UI/Window.lua','UI/Journal.lua','UI/Tooltip.lua','UI/Loot.lua']);
   const onDisk=(await fs.readdir(addonDir,{recursive:true,withFileTypes:true})).filter(e=>e.isFile()).map(e=>path.relative(addonDir,path.join(e.parentPath??e.path,e.name)).replaceAll('\\','/')).sort();
   assert.deepEqual(onDisk,['SimCLab.toc',...files].sort(),'no harnesses, notes or stray files ship with the addon');
   const toc=await fs.readFile(path.join(addonDir,'SimCLab.toc'),'utf8');
@@ -277,7 +278,8 @@ test('loot rolls get the same highlight and a chat line for upgrades',async()=>{
 test('/simclab capture stores the official SimulationCraft export with single pipes, and logout refreshes it',async()=>{
   const w=await loaded();
   await w.run('SlashCmdList.SIMCLAB("capture")');
-  assert.match((await w.lines('__mock.printed')).at(-1),/SimulationCraft addon is not loaded/);
+  assert.match((await w.lines('__mock.printed')).at(-1),/export stored/);
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimCLab','without the other addon, ours writes the export');
   await w.run(`SimulationcraftAPI = { GetSimcProfile = function(self, debug, noBags)
       __captureArgs = tostring(self) .. " " .. tostring(debug) .. " " .. tostring(noBags)
       return 'deathknight="Temulan"\\nhead=,id=1 ||cff||r\\n# Checksum: 1', nil
@@ -288,10 +290,11 @@ test('/simclab capture stores the official SimulationCraft export with single pi
   assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].spec'),'Blood');
   assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].simc'),'12.1.0-03');
   await w.run('SimulationcraftAPI.GetSimcProfile = function() return nil, "Error: You need to pick a spec!" end SimCLabDB.captures = {} __mock.event("PLAYER_LOGOUT")');
-  assert.equal(await w.get('next(SimCLabDB.captures) == nil'),true,'a failed export stores nothing');
-  await w.run('SimulationcraftAPI.GetSimcProfile = function() error("boom") end SlashCmdList.SIMCLAB("capture")');
-  assert.match((await w.lines('__mock.printed')).at(-1),/SimulationCraft failed/);
-  await w.run('SimulationcraftAPI.GetSimcProfile = function() return "x", nil end SlashCmdList.SIMCLAB("capture off") __mock.event("PLAYER_LOGOUT")');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimCLab','ours steps in when SimulationCraft refuses');
+  await w.run('SimulationcraftAPI.GetSimcProfile = function() error("boom") end __mock.player.specIndex = 0 SlashCmdList.SIMCLAB("capture")');
+  assert.match((await w.lines('__mock.printed')).at(-1),/boom.*no specialization/,'with neither export available, both reasons are shown');
+  await w.run('__mock.player.specIndex = 1');
+  await w.run('SimulationcraftAPI.GetSimcProfile = function() return "x", nil end SimCLabDB.captures = {} SlashCmdList.SIMCLAB("capture off") __mock.event("PLAYER_LOGOUT")');
   assert.equal(await w.get('next(SimCLabDB.captures) == nil'),true,'capture off means no capture at logout');
   w.close();
 });
@@ -302,5 +305,93 @@ test('saved settings survive, and unknown saved values fall back to defaults',as
   assert.equal(await w.get('SimCLabDB.settings.entrance'),true);
   assert.equal(await w.get('type(SimCLabDB.captures)'),'table');
   assert.equal(await w.get('__ns.IsDone("temulan-ravencrest", { itemId = 250001, track = 12830 })'),true);
+  w.close();
+});
+
+// ---------------------------------------------------------------------------
+// The addon's own /simc export, and how the character reaches the app
+// ---------------------------------------------------------------------------
+
+// A link with the type/value pairs and gem bonus IDs the game writes after the bonus list.
+const craftedLink=(id,bonuses,pairs,gemBonuses)=>`|cffa335ee|Hitem:${[id,'','','','','','','',90,250,'','',bonuses.length,...bonuses,pairs.length/2,...pairs,0,gemBonuses.length,...gemBonuses].join(':')}|h[Crafted ${id}]|h|r`;
+
+test("the addon writes its own /simc export that the app can import",async()=>{
+  const w=await loaded();
+  await w.run(`__mock.inventory[11] = "${craftedLink(250009,[6652,12841],[9,80,29,40,30,36],[7777])}"
+    __mock.itemLevels[__mock.inventory[1]] = 295
+    __mock.bags[0] = { __mock.link(250002, {12841}) }
+    __mock.craftedQuality = { ["${craftedLink(250009,[6652,12841],[9,80,29,40,30,36],[7777])}"] = 5 }`);
+  const text=await w.get('__ns.BuildProfile()');
+  // The header the app reads the game build from, and the identity lines.
+  assert.match(text,/^# Temulan - Blood - \d{4}-\d{2}-\d{2} \d{2}:\d{2} - EU\/Ravencrest\n/);
+  assert.match(text,/^# WoW 12\.1\.0\.69875, TOC 120100$/m);
+  assert.match(text,/^deathknight="Temulan"$/m);
+  assert.match(text,/^level=90$/m);assert.match(text,/^race=draenei$/m);assert.match(text,/^region=eu$/m);
+  assert.match(text,/^server=ravencrest$/m);assert.match(text,/^spec=blood$/m);assert.match(text,/^role=tank$/m);
+  assert.match(text,/^professions=herbalism=9\/enchanting=64$/m);
+  assert.match(text,/^talents=CoPAkXBWactive$/m);
+  assert.match(text,/^omnium_talents=1234:2\/1235:1$/m);
+  assert.match(text,/^# Saved Loadout: M\+ build\n# talents=CoPAkXBWsaved$/m);
+  // Equipped gear, with everything the item link carries.
+  assert.match(text,/^head=,id=240001,enchant_id=8016,bonus_id=12831\/6652$/m);
+  assert.match(text,/^neck=,id=240002,gem_id=240908,bonus_id=12841$/m);
+  assert.match(text,/^finger1=,id=250009,bonus_id=6652\/12841,drop_level=80,crafted_stats=40\/36,gem_bonus_id=7777,crafting_quality=5$/m);
+  assert.match(text,/^# Item 240001 \(295\)$/m,'the item level goes in the comment above the line');
+  // Bag items travel as comments; SimC Lab offers them as Gear Compare alternatives.
+  assert.match(text,/^### Gear from Bags$/m);
+  assert.match(text,/^# finger1=,id=250002,bonus_id=12841$/m);
+  // The app accepts it as a profile, keys it and reads its gear.
+  const who=identity(text,talentData);
+  assert.equal(who.key,'temulan-ravencrest');assert.equal(who.specId,250);assert.equal(who.region,'eu');
+  assert.deepEqual(who.gear.head,{itemId:240001,bonusIds:[12831,6652],enchant:8016});
+  assert.equal(checksumOk(text),true,'it carries the same checksum the SimulationCraft addon uses');
+  assert.equal(checksumOk(text.replace('level=90','level=80')),false);
+  w.close();
+});
+
+test('the export falls back to ours only when SimulationCraft cannot deliver',async()=>{
+  const w=await loaded();
+  await w.run('SlashCmdList.SIMCLAB("capture")');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimCLab');
+  assert.equal(await w.get('SimCLabDB.captureStatus.ok'),true);
+  assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/deathknight="Temulan"/);
+  // With the official addon present, its export wins.
+  await w.run(`SimulationcraftAPI = { GetSimcProfile = function() return 'deathknight="Temulan"\\nfrom ||the|| addon', nil end }
+    SlashCmdList.SIMCLAB("capture")`);
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimulationCraft addon');
+  assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/from \|the\| addon/);
+  // When it errors, ours steps in rather than nothing being captured.
+  await w.run('SimulationcraftAPI.GetSimcProfile = function() error("boom") end SlashCmdList.SIMCLAB("capture")');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimCLab');
+  w.close();
+});
+
+test('a character that cannot be exported says why, instead of going missing',async()=>{
+  const w=await loaded();
+  await w.run('__mock.player.specIndex = 0 __mock.player.specs = {} SlashCmdList.SIMCLAB("capture")');
+  assert.equal(await w.get('SimCLabDB.captureStatus.ok'),false);
+  assert.match(await w.get('SimCLabDB.captureStatus.reason'),/no specialization/);
+  assert.equal(await w.get('next(SimCLabDB.captures) == nil'),true);
+  assert.match((await w.lines('__mock.printed')).at(-1),/no specialization/);
+  w.close();
+});
+
+test('the character is captured shortly after login and after gear and talent changes',async()=>{
+  const w=await loaded();
+  assert.equal(await w.get('next(SimCLabDB.captures) == nil'),true,'nothing yet right after login');
+  await w.run('__mock.runTimers(15)');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"] ~= nil'),true,'captured without logging out');
+  const first=await w.get('SimCLabDB.captures["temulan-ravencrest"].time');
+  // Several events in a row share one capture, and it waits until combat is over.
+  await w.run(`__mock.inventory[1] = __mock.link(240001, {12832, 6652}, 8016)
+    __mock.event("PLAYER_EQUIPMENT_CHANGED", 1) __mock.event("PLAYER_EQUIPMENT_CHANGED", 2) __mock.event("TRAIT_CONFIG_UPDATED")
+    __mock.combat = true
+    InCombatLockdown = function() return __mock.combat end
+    __mock.runTimers(30)`);
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].time'),first,'in combat it waits');
+  assert.equal(await w.get('__ns.captureAfterCombat'),true);
+  await w.run('__mock.combat = false __mock.event("PLAYER_REGEN_ENABLED") __mock.runTimers(10)');
+  assert.ok(await w.get('SimCLabDB.captures["temulan-ravencrest"].time')>first,'and catches up once combat ends');
+  assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/^head=,id=240001,enchant_id=8016,bonus_id=12832\/6652$/m);
   w.close();
 });
