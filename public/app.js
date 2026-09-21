@@ -5,19 +5,20 @@ import {upgradeUI} from '/upgrades.js';
 import {tankUI,signed} from '/tank.js';
 import {engineUI} from '/engine.js';
 import {activityUI,describeProgress,duration} from '/activity.js';
+import {wowUI} from '/wow.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(n);
 const labels={head:'Head',neck:'Neck',shoulder:'Shoulders',back:'Back',chest:'Chest',wrist:'Wrists',hands:'Hands',waist:'Waist',legs:'Legs',feet:'Feet',finger1:'Ring 1',finger2:'Ring 2',main_hand:'Main hand',off_hand:'Offhand'};
-const modes={quick:['Quick Sim','Import your character. Find out what your gear can do.'],enchants:['Enchant Lab','Test Midnight enchants, ranks and combinations on your character.'],compare:['Gear Compare','Compare current-expansion gear, gems, talents and consumables.'],upgrades:['Upgrade Finder','Search raid, Mythic+, Great Vault, delve and crafted loot for your best simulated upgrades.'],talents:['Talent Search','Automatically generate legal builds and find the strongest tested talents for your gear.'],history:['History','Open previous results and download complete SimC reports.']};
+const modes={quick:['Quick Sim','Import your character. Find out what your gear can do.'],enchants:['Enchant Lab','Test Midnight enchants, ranks and combinations on your character.'],compare:['Gear Compare','Compare current-expansion gear, gems, talents and consumables.'],upgrades:['Upgrade Finder','Search raid, Mythic+, Great Vault, delve and crafted loot for your best simulated upgrades.'],talents:['Talent Search','Automatically generate legal builds and find the strongest tested talents for your gear.'],history:['History','Open previous results and download complete SimC reports.'],wow:['WoW addon','Bring your sims and gear farm into the game.']};
 const states={queued:'Queued',running:'Running',complete:'Complete',partial:'Partially complete',failed:'Failed',cancelled:'Cancelled',interrupted:'Interrupted on restart'};
 let token='',engine=null,mode='quick',profile=null,importedText='',selections={},currentJob=null,pollTimer=null,previewTimer=null;
 let variants=[{name:'Alternative 1',text:''}];
 async function api(url,data){const res=await fetch(url,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-SimC-Token':token},body:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw new Error(result.error||'The request failed.');return result;}
 function notice(message){$('#notice').hidden=!message;$('#notice').textContent=message||'';}
 function safeStore(key,value){try{localStorage.setItem(key,value);}catch{}}
-async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.mode===value));$('#page-title').innerHTML=`${esc(modes[value][0])}<span class="accent">.</span>`;$('#breadcrumb').textContent=modes[value][0];$('#page-description').textContent=modes[value][1];$('#workspace').hidden=value==='history';$('#history').hidden=value!=='history';$('#enchant-panel').hidden=value!=='enchants';$('#compare-panel').hidden=value!=='compare';$('#quick-info').hidden=value!=='quick';$('#talent-panel').hidden=value!=='talents';$('#upgrade-panel').hidden=value!=='upgrades';if(value==='history')await loadHistory();else updateCount();}
+async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.mode===value));$('#page-title').innerHTML=`${esc(modes[value][0])}<span class="accent">.</span>`;$('#breadcrumb').textContent=modes[value][0];$('#page-description').textContent=modes[value][1];$('#workspace').hidden=['history','wow'].includes(value);$('#history').hidden=value!=='history';$('#wow-panel').hidden=value!=='wow';$('#enchant-panel').hidden=value!=='enchants';$('#compare-panel').hidden=value!=='compare';$('#quick-info').hidden=value!=='quick';$('#talent-panel').hidden=value!=='talents';$('#upgrade-panel').hidden=value!=='upgrades';if(value==='history')await loadHistory();else if(value==='wow')await wow.refresh();else updateCount();}
 $$('.nav').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode).catch(e=>notice(e.message))));
 async function importProfile(){notice('');const text=$('#profile').value;const parsed=await api('/api/import',{profile:text});profile=parsed;importedText=text;selections={};safeStore('simc-lab-profile',text);$('#character').hidden=false;$('#character').innerHTML=`<span class="character-icon">◈</span><div><strong>${esc(parsed.info.name)}</strong><p>${esc(parsed.info.race)} · ${esc(parsed.info.spec)} ${esc(parsed.info.class)} · Level ${esc(parsed.info.level)}</p></div><span class="pill">${Object.keys(parsed.gear).length} gear slots</span>`;$('#import-status').textContent=`Imported · ${Object.keys(parsed.gear).length} gear slots · ready to simulate`;renderEnchants();renderImportedChoices();features.render(parsed);tank.show(parsed);updateCount();return parsed;}
 $('#import').addEventListener('click',async()=>{try{$('#import').disabled=true;await importProfile();}catch(e){notice(e.message);}finally{$('#import').disabled=false;}});
@@ -66,7 +67,7 @@ function renderJob(job){
   const progress=describeProgress(job);const scenario=job.current?.scenario?` · ${esc(job.current.scenario.style)}, ${job.current.scenario.targets} target${job.current.scenario.targets===1?'':'s'}`:'';
   const took=job.started&&job.finished?` · took ${duration((new Date(job.finished)-new Date(job.started))/1000)}`:'';
   $('#job-progress').innerHTML=waiting+`<div class="progress-description"><strong>${esc(job.name)}</strong> · ${job.done} of ${job.total} steps done${scenario}${took}${progress.lines.map(l=>`<br>${l}`).join('')}${job.error?`<br>${esc(job.error)}`:''}</div><div class="progress-track${job.status==='running'?' live':''}"><div class="progress-fill" style="width:${Math.round(100*progress.fraction)}%"></div></div>`;
-  let html=tank.summary(job)+features.results(job)+upgrades.results(job);
+  let html=wow.sendButton(job)+tank.summary(job)+features.results(job)+upgrades.results(job);
   if(job.settings.environment){const env=job.settings.environment;html+=`<details class="environment-detail"><summary>Environment used for this job</summary><p class="hint">External buffs: ${esc(Object.entries(env.buffs).filter(([,on])=>on).map(([key])=>key.replaceAll('_',' ')).join(', ')||'None')}<br>Bloodlust: ${env.buffs.bloodlust?esc(env.bloodlust.mode+' '+env.bloodlust.value):'No external override'} · Duration variation: ±${env.variation}%<br>Consumables: ${esc(Object.entries(env.consumables).map(([key,value])=>key.replaceAll('_',' ')+': '+value).join('; ')||'From profile / SimC')}</p></details>`;}
   for(let s=0;s<job.scenarios.length&&job.mode!=='upgrades';s++){
     const rows=job.results.filter(r=>r.scenario===s);if(!rows.length)continue;
@@ -112,6 +113,7 @@ const features=featureUI({api,getProfile:()=>profile,notice,updateCount,addVaria
 const upgrades=upgradeUI({api,notice,updateCount});
 const engineView=engineUI({api,notice});
 const activity=activityUI({api,openJob:async id=>{if(mode==='history')await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});},onChange:()=>{if(mode==='history')loadHistory().catch(()=>{});}});
+const wow=wowUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});
 const tank=tankUI({updateCount});
 const environment=environmentUI({api,notice,addVariant:v=>{if(variants.length===1&&!variants[0].text)variants=[];variants.push(v);renderVariants();updateCount();}});
 $('#enchant-slots').addEventListener('click',e=>{const slot=e.target.dataset.clearEnchants;if(slot){selections[slot]=[];renderEnchants();updateCount();}});

@@ -64,3 +64,9 @@
 @keyframes flow{to{background-position:-200% 0}}
 @media(max-width:900px){.activity-track{display:none}.activity{margin:0 8px 0 auto}}
 @media(prefers-reduced-motion:reduce){.activity-dot.on,.progress-track.live .progress-fill{animation:none}}
+
+.wow-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}.wow-grid .field-label{margin-top:0}.wow-path{font:13px Consolas,monospace;overflow-wrap:anywhere}.wow-grid .button{margin-top:6px}.wow-keep{margin-top:16px;max-width:520px}.wow-heading{font-size:14px;font-weight:600;margin:26px 0 8px}.wow-send{display:flex;align-items:center;gap:12px;margin:4px 0 18px}.wow-send .hint{margin:0}.wow-captures{border:1px solid var(--line);border-radius:7px;padding:4px 14px 10px;margin-bottom:14px;background:#141a25}.panel-heading #wow-import{margin-left:auto}
+@media(max-width:720px){.wow-grid{grid-template-columns:1fr}}
+.wow-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.wow-remove{background:#3a2730;border-color:#7a4a58;color:#f0b9c2}
+.wow-remove:hover{background:#4a3039}

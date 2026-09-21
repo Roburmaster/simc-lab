@@ -1,11 +1,12 @@
 {
   "name": "simc-lab",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
+    "test:ci": "node scripts/test-ci.mjs",
     "build:engine": "powershell -ExecutionPolicy Bypass -File scripts/build-engine.ps1",
     "install-engine": "node scripts/install-engine.mjs"
   },
@@ -16,5 +17,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Roburmaster/simc-lab.git"
+  },
+  "devDependencies": {
+    "luaparse": "^0.3.1",
+    "wasmoon": "^1.16.0"
   }
 }

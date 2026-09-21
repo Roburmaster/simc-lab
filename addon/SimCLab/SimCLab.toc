@@ -1,0 +1,19 @@
+## Interface: 120100
+## Title: SimC Lab
+## Notes: Simulation results, the gear farm and upgrade tooltips from the SimC Lab desktop app.
+## Author: Roburmaster
+## Version: 1.0.0
+## SavedVariables: SimCLabDB
+## OptionalDeps: Simulationcraft
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+## X-License: GPL-3.0-or-later
+## X-Website: https://mythicpersona.com/simc-lab
+
+Data.lua
+Core.lua
+Gear.lua
+UI\Widgets.lua
+UI\Window.lua
+UI\Journal.lua
+UI\Tooltip.lua
+UI\Loot.lua
