@@ -197,10 +197,11 @@ end
 function ns.BuildProfile()
   local specId, specName, index = ns.SpecInfo()
   if not specId then return nil, "this character has no specialization yet" end
-  -- SimC needs the specialization by name; the table stands in when the client answers with the ID alone.
-  local specToken = specName and ns.Tokenize(specName) or nil
-  if not specToken or specToken == "" then specToken = ns.SPECS[specId] end
-  if not specToken then return nil, "the game did not say which specialization this is (" .. tostring(specId) .. ")" end
+  -- The ID decides. The client's name for a specialization is translated, and SimC wants the English one;
+  -- on this build it often does not hand out a name at all. A name is only used for an ID we do not know.
+  local specToken = ns.SPECS[specId]
+  if not specToken and specName then specToken = ns.Tokenize(specName) end
+  if not specToken or specToken == "" then return nil, "the game did not say which specialization this is (" .. tostring(specId) .. ")" end
   local name = UnitName("player")
   local _, classToken = UnitClass("player")
   local _, raceToken_ = UnitRace("player")

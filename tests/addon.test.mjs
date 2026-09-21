@@ -287,7 +287,7 @@ test('/simclab capture stores the official SimulationCraft export with single pi
     SlashCmdList.SIMCLAB("capture")`);
   assert.equal(await w.get('__captureArgs'),'nil false false');
   assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),'deathknight="Temulan"\nhead=,id=1 |cff|r\n# Checksum: 1');
-  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].spec'),'Blood');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].spec'),'blood',"SimC's own name for the spec, not the client's translated one");
   assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].simc'),'12.1.0-03');
   await w.run('SimulationcraftAPI.GetSimcProfile = function() return nil, "Error: You need to pick a spec!" end SimCLabDB.captures = {} __mock.event("PLAYER_LOGOUT")');
   assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimCLab','ours steps in when SimulationCraft refuses');
@@ -404,12 +404,19 @@ test('the export names the specialization even when the client only gives its ID
     GetSpecializationRole = nil`);
   const text=await w.get('__ns.BuildProfile()');
   assert.match(text,/^spec=blood$/m);
+  assert.match(text,/^# Temulan - blood - /m);
   assert.match(text,/^role=tank$/m,'the tank specs are known by ID too');
   assert.match(text,/^# Temulan - blood - /m);
   assert.equal(identity(text,talentData).specId,250);
   // The capture says which spec it is, so the app can label it.
   await w.run('SlashCmdList.SIMCLAB("capture")');
   assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].spec'),'blood');
+  // A client in another language hands out a translated name; the ID table keeps spec= English.
+  await w.run('__mock.player.specs[1] = {250, "Blod"} C_SpecializationInfo.GetSpecializationInfo = function(i) local s = __mock.player.specs[i] if s then return s[1], s[2] end end');
+  assert.match(await w.get('__ns.BuildProfile()'),/^spec=blood$/m);
+  await w.run('SlashCmdList.SIMCLAB("capture")');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].spec'),'blood');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].addon'),'1.2.3','the capture says which addon wrote it');
   // A specialization nobody knows is refused, rather than written without a spec line.
   await w.run('__mock.player.specs[1] = {999999, nil} __ns.wipe(SimCLabDB.captures) SlashCmdList.SIMCLAB("capture")');
   assert.match((await w.lines('__mock.printed')).at(-1),/did not say which specialization/);

@@ -196,7 +196,11 @@ function EJ_GetEncounterInfo(id) return "Encounter " .. tostring(id) end
 function GetInstanceInfo() return __mock.instance.name, __mock.instance.kind end
 function InCombatLockdown() return false end
 function GetBuildInfo() return "12.1.0", "69875", "Sep 18 2026", 120100 end
-C_AddOns = { GetAddOnMetadata = function(name, field) if name == "Simulationcraft" and field == "Version" then return "12.1.0-03" end end }
+C_AddOns = { GetAddOnMetadata = function(name, field)
+  if field ~= "Version" then return nil end
+  if name == "Simulationcraft" then return "12.1.0-03" end
+  if name == "SimCLab" then return __mock.addonVersion or "1.2.3" end
+end }
 function IsModifiedClick() return false end
 function HandleModifiedItemClick() end
 

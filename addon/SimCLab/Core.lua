@@ -482,6 +482,7 @@ local function initDB()
   end
   SimCLabDB.checklist = type(SimCLabDB.checklist) == "table" and SimCLabDB.checklist or {}
   SimCLabDB.captures = type(SimCLabDB.captures) == "table" and SimCLabDB.captures or {}
+  SimCLabDB.addon = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ns.name, "Version") or nil
 end
 
 -- Stores the official SimulationCraft addon's own /simc export, so SimC Lab can import the character without
@@ -519,10 +520,12 @@ function ns.Capture()
     end
   end
   local specId, specName = specInfo()
-  specName = specName or (specId and ns.SPECS and ns.SPECS[specId]) or nil
+  -- The English name for the app's list; the client's own name is translated.
+  specName = (specId and ns.SPECS and ns.SPECS[specId]) or specName or nil
   local captures = SimCLabDB.captures
   captures[ns.PlayerKey()] = {
     text = profile, time = time(), name = UnitName("player"), realm = GetRealmName(), spec = specName, source = source,
+    addon = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ns.name, "Version") or nil,
     simc = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("Simulationcraft", "Version") or nil,
   }
   SimCLabDB.captureStatus = { ok = true, source = source, time = time(), name = UnitName("player"), realm = GetRealmName() }
