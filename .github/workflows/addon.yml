@@ -39,4 +39,6 @@ jobs:
         working-directory: dist/addon
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" addon.json SimCLab-addon.zip --verify-tag --title "SimCLab addon ${{ github.ref_name }}" --notes "The SimCLab World of Warcraft addon. SimC Lab installs it for you; this release is what it downloads, and the zip is for installing it by hand."
+        # --latest=false keeps the Latest badge on the newest app release: /releases/latest/download is what
+        # the website links to and what installed apps read latest.yml from.
+        run: gh release create "${{ github.ref_name }}" addon.json SimCLab-addon.zip --verify-tag --latest=false --title "SimCLab addon ${{ github.ref_name }}" --notes "The SimCLab World of Warcraft addon. SimC Lab installs it for you; this release is what it downloads, and the zip is for installing it by hand."
