@@ -395,3 +395,38 @@ test('the character is captured shortly after login and after gear and talent ch
   assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/^head=,id=240001,enchant_id=8016,bonus_id=12832\/6652$/m);
   w.close();
 });
+
+test('the export names the specialization even when the client only gives its ID',async()=>{
+  const w=await loaded();
+  // What the live 12.1.0 client does: the namespaced call answers with the ID and no name.
+  await w.run(`C_SpecializationInfo.GetSpecializationInfo = function(index) local s = __mock.player.specs[index] if s then return s[1] end end
+    GetSpecializationInfo = nil
+    GetSpecializationRole = nil`);
+  const text=await w.get('__ns.BuildProfile()');
+  assert.match(text,/^spec=blood$/m);
+  assert.match(text,/^role=tank$/m,'the tank specs are known by ID too');
+  assert.match(text,/^# Temulan - blood - /m);
+  assert.equal(identity(text,talentData).specId,250);
+  // The capture says which spec it is, so the app can label it.
+  await w.run('SlashCmdList.SIMCLAB("capture")');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].spec'),'blood');
+  // A specialization nobody knows is refused, rather than written without a spec line.
+  await w.run('__mock.player.specs[1] = {999999, nil} __ns.wipe(SimCLabDB.captures) SlashCmdList.SIMCLAB("capture")');
+  assert.match((await w.lines('__mock.printed')).at(-1),/did not say which specialization/);
+  assert.equal(await w.get('next(SimCLabDB.captures) == nil'),true);
+  w.close();
+});
+
+test('every specialization in the game data has a SimC name in the addon',async()=>{
+  const w=await world();
+  await w.login();
+  const specs=JSON.parse(await w.get(`(function()
+    local out = {}
+    for id, token in pairs(__ns.SPECS) do out[#out + 1] = '"' .. id .. '":"' .. token .. '"' end
+    table.sort(out)
+    return "{" .. table.concat(out, ",") .. "}"
+  end)()`));
+  assert.equal(Object.keys(specs).length,40,'thirteen classes, Demon Hunter now with three');
+  for(const [id,token] of [[250,'blood'],[72,'fury'],[253,'beast_mastery'],[1480,'devourer'],[1473,'augmentation']])assert.equal(specs[id],token);
+  w.close();
+});

@@ -92,6 +92,8 @@ export function wowUI({api,notice,importText}){
   };
   function describe(c){
     if(!c)return '';
+    // An export the app cannot read says so here, rather than failing when it is chosen.
+    if(c.problem)return `${esc(c.name)}: the game's export cannot be read — ${esc(c.problem)} Log in on the character again once the addon has been updated.`;
     return `${esc(c.spec||'')} ${esc(c.name)} of ${esc(c.realm)}, captured ${esc(ago(c.time))} by ${esc(c.source)}.${c.checksum===false?' The export\'s checksum does not match, so it may have been edited.':''}`;
   }
   async function load(character,{quiet=false}={}){
@@ -108,7 +110,7 @@ export function wowUI({api,notice,importText}){
     // The list stays on show even while it is empty: it is where characters will appear, and it says
     // what is still missing. Only a machine without World of Warcraft hides it.
     box.hidden=!data.found;
-    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(c.spec||'')}</option>`).join('')||'<option value="">No characters captured yet</option>';
+    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(c.spec||'')}${c.usable===false?' · needs a new capture':''}</option>`).join('')||'<option value="">No characters captured yet</option>';
     select.disabled=!characters.length;
     $('#wow-character-load').disabled=!characters.length;
     if(characters.some(c=>c.key===chosen))select.value=chosen;
@@ -123,7 +125,7 @@ export function wowUI({api,notice,importText}){
     try{
       const newest=renderCharacters(await api('/api/wow/captures'));
       // On a fresh start with nothing pasted, the newest character is loaded straight away.
-      if(autoLoad&&newest&&!$('#profile').value.trim())await load(newest,{quiet:true});
+      if(autoLoad&&newest&&newest.usable!==false&&!$('#profile').value.trim())await load(newest,{quiet:true});
     }catch{}
   }
   $('#wow-character').addEventListener('change',()=>{

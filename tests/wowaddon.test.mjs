@@ -18,6 +18,8 @@ test.after(()=>fs.rm(temp,{recursive:true,force:true}));
 const tracks=trackTable(season);
 const addon=()=>new WowAddon({installDir:async()=>null,context:async()=>({tracks,app:'9.9.9'})});
 const exists=f=>fs.access(f).then(()=>true,()=>false);
+// A Lua string as WoW writes one into SavedVariables.
+const luaQuote=s=>'"'+s.replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,'\\n')+'"';
 async function tree(dir){
   const out=[];
   for(const e of await fs.readdir(dir,{withFileTypes:true,recursive:true}))if(e.isFile())out.push(path.relative(dir,path.join(e.parentPath??e.path,e.name)).replaceAll('\\','/'));
@@ -133,17 +135,16 @@ test('a SimCLab folder that is a link elsewhere is never written through',{skip:
 
 test('captured exports are read from every account and checked against their checksum',async()=>{
   await addon().install(); // the link test above left the folder removed
-  const body='# SimC Addon 12.1.0-03\ndeathknight="Temulan"\nserver=ravencrest\nspec=blood\n\n';
+  const body='# SimC Addon 12.1.0-03\ndeathknight="Temulan"\nlevel=90\nserver=ravencrest\nspec=blood\nhead=,id=240001\n\n';
   let s1=1,s2=0;for(const b of Buffer.from(body,'utf8')){s1+=b;s2+=s1;}
   const text=`${body}# Checksum: ${((s2%65521)*65536+(s1%65521)>>>0).toString(16)}`;
   assert.equal(checksumOk(text),true);
   assert.equal(checksumOk(text.replace('blood','frost')),false);
   assert.equal(checksumOk('no checksum'),null);
-  const quote=s=>'"'+s.replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,'\\n')+'"';
   for(const [account,time] of [['ACCOUNT1',100],['ACCOUNT2',200]]){
     const dir=path.join(retail,'WTF','Account',account,'SavedVariables');
     await fs.mkdir(dir,{recursive:true});
-    await fs.writeFile(path.join(dir,'SimCLab.lua'),`\nSimCLabDB = {\n["captures"] = {\n["temulan-ravencrest"] = {\n["text"] = ${quote(text)},\n["time"] = ${time},\n["name"] = "Temulan",\n["realm"] = "Ravencrest",\n["spec"] = "Blood",\n},\n},\n["version"] = 1,\n}\n`);
+    await fs.writeFile(path.join(dir,'SimCLab.lua'),`\nSimCLabDB = {\n["captures"] = {\n["temulan-ravencrest"] = {\n["text"] = ${luaQuote(text)},\n["time"] = ${time},\n["name"] = "Temulan",\n["realm"] = "Ravencrest",\n["spec"] = "Blood",\n},\n},\n["version"] = 1,\n}\n`);
   }
   await fs.mkdir(path.join(retail,'WTF','Account','BROKEN','SavedVariables'),{recursive:true});
   await fs.writeFile(path.join(retail,'WTF','Account','BROKEN','SavedVariables','SimCLab.lua'),'SimCLabDB = { os.exit() }');
@@ -153,6 +154,7 @@ test('captured exports are read from every account and checked against their che
   assert.deepEqual(characters.map(c=>[c.account,c.name,c.time,c.checksum,c.source]),[['ACCOUNT2','Temulan',200,true,'SimulationCraft addon']],
     'one row per character: the newest capture wins, and the file that is not data is skipped');
   assert.equal(characters[0].text,text);
+  assert.equal(characters[0].usable,true);
   assert.deepEqual(problems,[]);
 });
 
@@ -282,4 +284,18 @@ test('an addon built for another data schema is never installed',async()=>{
   assert.match(online.error,/data schema 2/);
   assert.equal((await a.status()).newest,(await readToc(shippedDir)).version,'the app keeps its own copy');
   await assert.rejects(a.installOnline(manifest),/data schema 2/);
+});
+
+test('an export the app cannot read is listed with the reason, not hidden',async()=>{
+  const dir=path.join(retail,'WTF','Account','ACCOUNT4','SavedVariables');
+  await fs.mkdir(dir,{recursive:true});
+  // What the addon wrote before it knew the specialization by ID: everything but spec=.
+  const broken=luaQuote('warrior="Roburevolved"\nlevel=90\nspec=\nhead=,id=271456\n');
+  await fs.writeFile(path.join(dir,'SimCLab.lua'),`\nSimCLabDB = {\n["captures"] = {\n["roburevolved-ravencrest"] = {\n["text"] = ${broken},\n["time"] = 500,\n["name"] = "Roburevolved",\n["realm"] = "Ravencrest",\n["source"] = "SimCLab",\n},\n},\n}\n`);
+  try{
+    const {characters}=await addon().captures();
+    const broken_=characters.find(c=>c.key==='roburevolved-ravencrest');
+    assert.equal(broken_.usable,false);
+    assert.match(broken_.problem,/missing spec=/);
+  }finally{await fs.rm(path.join(retail,'WTF','Account','ACCOUNT4'),{recursive:true,force:true});}
 });

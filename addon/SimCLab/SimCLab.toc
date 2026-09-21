@@ -2,7 +2,7 @@
 ## Title: SimC Lab
 ## Notes: Simulation results, the gear farm and upgrade tooltips from the SimC Lab desktop app.
 ## Author: Roburmaster
-## Version: 1.2.1
+## Version: 1.2.2
 ## SavedVariables: SimCLabDB
 ## OptionalDeps: Simulationcraft
 ## IconTexture: Interface\Icons\INV_Misc_Book_09

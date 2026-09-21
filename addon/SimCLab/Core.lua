@@ -200,14 +200,32 @@ end
 -- The logged-in character and its specialization
 -------------------------------------------------------------------------------
 
-local function specInfo()
+-- The specialization's ID, its name and the index it sits at. The client is not consistent about the name:
+-- C_SpecializationInfo.GetSpecializationInfo answers with the ID alone on some builds, so every way of asking
+-- is tried, and the caller falls back to ns.SPECS when the name never arrives.
+function ns.SpecInfo()
   local getSpec = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
-  local getInfo = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo) or GetSpecializationInfo
   local index = getSpec and getSpec()
   if not index or index == 0 then return nil end
-  local id, name = getInfo(index)
-  return id, name
+  local id, name
+  local getters = {}
+  if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then getters[#getters + 1] = C_SpecializationInfo.GetSpecializationInfo end
+  if GetSpecializationInfo then getters[#getters + 1] = GetSpecializationInfo end
+  for _, get in ipairs(getters) do
+    local ok, a, b = pcall(get, index)
+    if ok then
+      if type(a) == "table" then a, b = a.id or a.specID, b or a.name end
+      id = id or (type(a) == "number" and a or nil)
+      name = name or (type(b) == "string" and b ~= "" and b or nil)
+    end
+  end
+  if id and not name and C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfoByID then
+    local _, byId = C_SpecializationInfo.GetSpecializationInfoByID(id)
+    if type(byId) == "string" and byId ~= "" then name = byId end
+  end
+  return id, name, index
 end
+local specInfo = ns.SpecInfo
 
 function ns.PlayerKey()
   return ns.CharacterKey(UnitName("player"), GetRealmName())
@@ -500,7 +518,8 @@ function ns.Capture()
       return captureFailed(why and (why .. "; and SimCLab's own export: " .. ours) or ours)
     end
   end
-  local _, specName = specInfo()
+  local specId, specName = specInfo()
+  specName = specName or (specId and ns.SPECS and ns.SPECS[specId]) or nil
   local captures = SimCLabDB.captures
   captures[ns.PlayerKey()] = {
     text = profile, time = time(), name = UnitName("player"), realm = GetRealmName(), spec = specName, source = source,
