@@ -90,11 +90,14 @@ export function wowUI({api,notice,importText}){
     if(seconds<172800)return `${Math.round(seconds/3600)} hours ago`;
     return when(unix);
   };
+  // The export names a spec the way SimC does, in lower case with underscores: beast_mastery reads better
+  // as Beast Mastery.
+  const specName=spec=>String(spec||'').split('_').filter(Boolean).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
   function describe(c){
     if(!c)return '';
     // An export the app cannot read says so here, rather than failing when it is chosen.
-    if(c.problem)return `${esc(c.name)}: the game's export cannot be read — ${esc(c.problem)} Log in on the character again once the addon has been updated.`;
-    return `${esc(c.spec||'')} ${esc(c.name)} of ${esc(c.realm)}, captured ${esc(ago(c.time))} by ${esc(c.source)}.${c.checksum===false?' The export\'s checksum does not match, so it may have been edited.':''}`;
+    if(c.problem)return `${esc(c.name)}: the game's export cannot be read — ${esc(c.problem)}${c.addon?` It was written by addon ${esc(c.addon)}.`:''} Log in on the character and type /reload to capture it again.`;
+    return `${esc(specName(c.spec))} ${esc(c.name)} of ${esc(c.realm)}, captured ${esc(ago(c.time))} by ${esc(c.source)}.${c.checksum===false?' The export\'s checksum does not match, so it may have been edited.':''}`;
   }
   async function load(character,{quiet=false}={}){
     if(!character)return;
@@ -110,7 +113,7 @@ export function wowUI({api,notice,importText}){
     // The list stays on show even while it is empty: it is where characters will appear, and it says
     // what is still missing. Only a machine without World of Warcraft hides it.
     box.hidden=!data.found;
-    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(c.spec||'')}${c.usable===false?' · needs a new capture':''}</option>`).join('')||'<option value="">No characters captured yet</option>';
+    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(specName(c.spec))}${c.usable===false?' · needs a new capture':''}</option>`).join('')||'<option value="">No characters captured yet</option>';
     select.disabled=!characters.length;
     $('#wow-character-load').disabled=!characters.length;
     if(characters.some(c=>c.key===chosen))select.value=chosen;
