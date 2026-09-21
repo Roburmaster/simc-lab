@@ -24,6 +24,13 @@ test('app, desktop shell and lockfile carry the same version, and the addon a ve
   assert.match(toc.match(/^## Version: (.+?)\s*$/m)?.[1]??'',/^\d+\.\d+\.\d+$/,'addon/SimCLab/SimCLab.toc');
 });
 
+// /releases/latest/download is the website's download link and where installed apps read latest.yml, so an
+// addon release must never take the Latest badge from the newest app release.
+test('an addon release leaves the Latest badge on the app release',async()=>{
+  const workflow=await fs.readFile(new URL('../.github/workflows/addon.yml',import.meta.url),'utf8');
+  assert.match(workflow,/gh release create[^\r\n]*--latest=false/);
+});
+
 test('engine installation refuses GitHub Actions before downloading or building',()=>{
   const result=spawnSync(process.execPath,[fileURLToPath(new URL('../scripts/install-engine.mjs',import.meta.url))],{
     encoding:'utf8',env:{...process.env,GITHUB_ACTIONS:'true'}
