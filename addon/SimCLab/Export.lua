@@ -15,6 +15,21 @@ local SLOTS = {
 -- Type/value pairs that follow the bonus IDs in an item link.
 local MOD_DROP_LEVEL, MOD_CONTENT_TUNING, MOD_CRAFT_STATS_1, MOD_CRAFT_STATS_2, MOD_REDIRECTED_BASE_STATS = 9, 28, 29, 30, 64
 local REGIONS = { "us", "kr", "eu", "tw", "cn" }
+
+-- Every specialization's SimC name, by specialization ID. The client does not always hand out the name --
+-- C_SpecializationInfo.GetSpecializationInfo answers with the ID alone on this build -- and a profile without
+-- spec= cannot be simulated, so the names live here as well.
+ns.SPECS = {
+  [62]="arcane", [63]="fire", [64]="frost", [65]="holy", [66]="protection", [70]="retribution",
+  [71]="arms", [72]="fury", [73]="protection", [102]="balance", [103]="feral", [104]="guardian",
+  [105]="restoration", [250]="blood", [251]="frost", [252]="unholy", [253]="beast_mastery", [254]="marksmanship",
+  [255]="survival", [256]="discipline", [257]="holy", [258]="shadow", [259]="assassination", [260]="outlaw",
+  [261]="subtlety", [262]="elemental", [263]="enhancement", [264]="restoration", [265]="affliction", [266]="demonology",
+  [267]="destruction", [268]="brewmaster", [269]="windwalker", [270]="mistweaver", [577]="havoc", [581]="vengeance",
+  [1467]="devastation", [1468]="preservation", [1473]="augmentation", [1480]="devourer",
+}
+-- The specs SimC Lab simulates as tanks, for role=tank when the client does not say.
+ns.TANK_SPECS = { [250]=true, [66]=true, [73]=true, [104]=true, [268]=true, [581]=true }
 local EQUIP_SLOTS = {
   INVTYPE_HEAD = "head", INVTYPE_NECK = "neck", INVTYPE_SHOULDER = "shoulder", INVTYPE_CLOAK = "back",
   INVTYPE_CHEST = "chest", INVTYPE_ROBE = "chest", INVTYPE_WRIST = "wrist", INVTYPE_HAND = "hands",
@@ -175,20 +190,17 @@ local function bagLines(lines)
 end
 
 function ns.SpecId()
-  local getSpec = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
-  local getInfo = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo) or GetSpecializationInfo
-  local index = getSpec and getSpec()
-  if not index or index == 0 then return nil end
-  return (getInfo(index))
+  return (ns.SpecInfo())
 end
 
 -- Builds the profile. Returns the text, or nil and why it could not be built.
 function ns.BuildProfile()
-  local getInfo = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo) or GetSpecializationInfo
-  local getSpec = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
-  local index = getSpec and getSpec()
-  if not index or index == 0 then return nil, "this character has no specialization yet" end
-  local specId, specName = getInfo(index)
+  local specId, specName, index = ns.SpecInfo()
+  if not specId then return nil, "this character has no specialization yet" end
+  -- SimC needs the specialization by name; the table stands in when the client answers with the ID alone.
+  local specToken = specName and ns.Tokenize(specName) or nil
+  if not specToken or specToken == "" then specToken = ns.SPECS[specId] end
+  if not specToken then return nil, "the game did not say which specialization this is (" .. tostring(specId) .. ")" end
   local name = UnitName("player")
   local _, classToken = UnitClass("player")
   local _, raceToken_ = UnitRace("player")
@@ -198,7 +210,7 @@ function ns.BuildProfile()
   local version, build, _, toc = GetBuildInfo()
 
   local lines = {
-    "# " .. name .. " - " .. tostring(specName) .. " - " .. date("%Y-%m-%d %H:%M") .. " - " .. tostring(region):upper() .. "/" .. tostring(realm),
+    "# " .. name .. " - " .. (specName or specToken) .. " - " .. date("%Y-%m-%d %H:%M") .. " - " .. tostring(region):upper() .. "/" .. tostring(realm),
     "# SimCLab " .. (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ns.name, "Version") or ""),
     "# WoW " .. tostring(version) .. "." .. tostring(build) .. ", TOC " .. tostring(toc),
     "# Written by SimC Lab's own addon, in the format of the SimulationCraft addon.",
@@ -207,10 +219,10 @@ function ns.BuildProfile()
     "race=" .. raceToken(raceToken_ == "Scourge" and "Undead" or raceToken_),
     "region=" .. ns.Tokenize(region),
     "server=" .. ns.Tokenize(realm),
-    "spec=" .. ns.Tokenize(specName),
+    "spec=" .. specToken,
   }
-  local role = GetSpecializationRole and GetSpecializationRole(index)
-  if role == "TANK" then lines[#lines + 1] = "role=tank" end
+  local role = index and GetSpecializationRole and GetSpecializationRole(index)
+  if role == "TANK" or (not role and ns.TANK_SPECS[specId]) then lines[#lines + 1] = "role=tank" end
   local professions = {}
   if GetProfessions then
     local first, second = GetProfessions()
