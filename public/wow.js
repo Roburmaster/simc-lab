@@ -89,20 +89,23 @@ export function wowUI({api,notice,importText}){
     catch(e){if(!quiet)notice(e.message);}
   }
   function renderCharacters(data){
-    const next=JSON.stringify(data.characters.map(c=>[c.key,c.time]))+JSON.stringify(data.problems.map(p=>[p.reason,p.time]));
+    const next=JSON.stringify([data.found,data.installed,data.characters.map(c=>[c.key,c.time]),data.problems.map(p=>[p.reason,p.time])]);
     if(next===signature)return;
     signature=next;characters=data.characters;
     const select=$('#wow-character'),box=$('#wow-characters');
     const chosen=select.value;
-    box.hidden=!characters.length&&!data.problems.length;
-    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(c.spec||'')}</option>`).join('')||'<option value="">No characters yet</option>';
+    // The list stays on show even while it is empty: it is where characters will appear, and it says
+    // what is still missing. Only a machine without World of Warcraft hides it.
+    box.hidden=!data.found;
+    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(c.spec||'')}</option>`).join('')||'<option value="">No characters captured yet</option>';
     select.disabled=!characters.length;
     $('#wow-character-load').disabled=!characters.length;
     if(characters.some(c=>c.key===chosen))select.value=chosen;
     const problem=data.problems[0];
     $('#wow-character-hint').innerHTML=characters.length?describe(characters.find(c=>c.key===select.value))
       :problem?`The game could not build an export for ${esc(problem.name||'your character')}: ${esc(problem.reason)}`
-      :'Install the addon under WoW addon, log in and type /reload. Your characters then appear here by themselves.';
+      :!data.installed?'Install the SimCLab addon first, under WoW addon in the menu. Your characters then appear here by themselves.'
+      :'Log in on a character. The addon captures it a few seconds later, and the game writes it when you type /reload or log out — then it appears here.';
     return characters.find(c=>c.key===select.value);
   }
   async function refreshCharacters({autoLoad=false}={}){

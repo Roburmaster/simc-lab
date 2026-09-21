@@ -132,6 +132,7 @@ test('a SimCLab folder that is a link elsewhere is never written through',{skip:
 });
 
 test('captured exports are read from every account and checked against their checksum',async()=>{
+  await addon().install(); // the link test above left the folder removed
   const body='# SimC Addon 12.1.0-03\ndeathknight="Temulan"\nserver=ravencrest\nspec=blood\n\n';
   let s1=1,s2=0;for(const b of Buffer.from(body,'utf8')){s1+=b;s2+=s1;}
   const text=`${body}# Checksum: ${((s2%65521)*65536+(s1%65521)>>>0).toString(16)}`;
@@ -146,7 +147,9 @@ test('captured exports are read from every account and checked against their che
   }
   await fs.mkdir(path.join(retail,'WTF','Account','BROKEN','SavedVariables'),{recursive:true});
   await fs.writeFile(path.join(retail,'WTF','Account','BROKEN','SavedVariables','SimCLab.lua'),'SimCLabDB = { os.exit() }');
-  const {characters,problems}=await addon().captures();
+  const {characters,problems,found,installed}=await addon().captures();
+  assert.equal(found,true);
+  assert.equal(installed,(await readToc(shippedDir)).version,'the panel can say whether the addon is there yet');
   assert.deepEqual(characters.map(c=>[c.account,c.name,c.time,c.checksum,c.source]),[['ACCOUNT2','Temulan',200,true,'SimulationCraft addon']],
     'one row per character: the newest capture wins, and the file that is not data is skipped');
   assert.equal(characters[0].text,text);
