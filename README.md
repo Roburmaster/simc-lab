@@ -54,7 +54,12 @@ SimC Lab ships a World of Warcraft addon, SimCLab (`addon/SimCLab`), and install
 
 Each feature can be switched off with `/simclab tooltip|entrance|journal|vault|loot off`.
 
-**Installing and updating.** Open **WoW addon** in the app. It finds the AddOns folder through the same registry entry that supplies your WoW build (or `SIMC_LAB_WOW_DIR`, pointing at a `_retail_` folder), shows the installed and shipped addon versions, and installs the copy that ships inside the app. When the app updates and the addon it ships is newer, an installed addon is updated on the next start. SimC Lab writes only inside `InterfaceAddOnsSimCLab`, never touches other addons, writes every file as a temporary file followed by a rename, and refuses to write if the SimCLab folder is a link to another location.
+**Installing and updating.** Open **WoW addon** in the app. It finds the AddOns folder through the same registry entry that supplies your WoW build (or `SIMC_LAB_WOW_DIR`, pointing at a `_retail_` folder) and shows the installed and shipped addon versions. One button decides whether the addon is installed at all:
+
+- **Install addon** puts the copy that ships inside the app into `InterfaceAddOnsSimCLab` and turns automatic updates on. From then on, whenever SimC Lab updates itself and ships a newer addon, the addon is updated when the app starts. **Reinstall** writes the shipped copy again, and **Update to x.y.z** installs a waiting update without restarting.
+- **Remove addon** (two clicks, since it deletes files in the game folder) removes the files SimC Lab wrote, including `Data.lua`, and stops the app installing it again. Files you put in the addon folder yourself are kept, and so is everything the game saved outside AddOns, including the addon's SavedVariables and your sims in the app.
+
+SimC Lab writes only inside `InterfaceAddOnsSimCLab`, never touches other addons, writes every file as a temporary file followed by a rename, and refuses to write if the SimCLab folder is a link to another location.
 
 **Sending results.** Upgrade Finder, Talent Search and Gear Compare results have a **Send to WoW** button, and the WoW addon panel can send them automatically after every finished job. The app keeps what was sent in `%LOCALAPPDATA%SimC Labwowstore.json` and regenerates `Data.lua` from it: data is keyed by character-realm and specialization, and the last 5 sims per key are kept (1–10, configurable). Then type `/reload` in the game: addons have no network or file access, so `Data.lua` is read only at login or `/reload`.
 

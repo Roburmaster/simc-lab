@@ -53,13 +53,49 @@ test('install copies the shipped addon, writes Data.lua and touches nothing else
   assert.match(await fs.readFile(path.join(addons,'SimCLab','Data.lua'),'utf8'),/generated [^\n]*\n--[^\n]*\nlocal _, ns = \.\.\.\nns\.data = \{\n  schemaVersion=1,/);
 });
 
-test('an old install is updated automatically, a missing one is not installed',async()=>{
+test('installing turns the addon on, and an old install is then updated automatically',async()=>{
+  assert.equal((await addon().status()).manage,true,'the Install button turned it on');
   const toc=path.join(addons,'SimCLab','SimCLab.toc');
   await fs.writeFile(toc,(await fs.readFile(toc,'utf8')).replace(/## Version: .*/,'## Version: 0.0.1'));
   assert.equal((await addon().status()).updateAvailable,true);
   assert.equal(await addon().autoUpdate(),true);
   assert.equal((await addon().status()).updateAvailable,false);
-  assert.equal(await addon().autoUpdate(),false);
+  assert.equal(await addon().autoUpdate(),false,'nothing to do when it is up to date');
+});
+
+test('the Remove button deletes what the app wrote, and stops it coming back',async()=>{
+  const a=addon();
+  const mine=path.join(addons,'SimCLab','Notes.txt');
+  await fs.writeFile(mine,'kept');
+  const status=await a.uninstall();
+  assert.equal(status.installed,null);
+  assert.equal(status.manage,false);
+  assert.deepEqual(await fs.readdir(path.join(addons,'SimCLab')),['Notes.txt'],'only files SimC Lab wrote are removed');
+  assert.equal(await a.autoUpdate(),false,'removed means removed: no reinstall on the next start');
+  await fs.rm(mine);
+  await a.uninstall();
+  assert.equal(await exists(path.join(addons,'SimCLab')),false,'an empty folder goes too');
+  assert.equal((await a.uninstall()).installed,null,'removing twice is not an error');
+  // Turned on again, a missing addon is installed on the next start.
+  await a.setManage(true);
+  assert.equal(await a.autoUpdate(),true);
+  assert.equal((await a.status()).installed,(await readToc(shippedDir)).version);
+});
+
+test('an addon installed before this setting existed keeps being updated',async()=>{
+  const a=addon();
+  const store=await a.loadStore();store.settings.manage=null;await a.saveStore(store);
+  assert.equal((await a.status()).manage,true,'installed, so it is managed until the user says otherwise');
+  const toc=path.join(addons,'SimCLab','SimCLab.toc');
+  await fs.writeFile(toc,(await fs.readFile(toc,'utf8')).replace(/## Version: .*/,'## Version: 0.0.1'));
+  assert.equal(await a.autoUpdate(),true);
+  const empty=addon();
+  const fresh=await empty.loadStore();fresh.settings.manage=null;await empty.saveStore(fresh);
+  await empty.uninstall();
+  const afterRemoval=await empty.loadStore();afterRemoval.settings.manage=null;await empty.saveStore(afterRemoval);
+  assert.equal((await empty.status()).manage,false,'nothing installed, so nothing is installed unasked');
+  assert.equal(await empty.autoUpdate(),false);
+  await empty.install();
 });
 
 test('Send to WoW keeps the store and regenerates Data.lua',async()=>{
@@ -72,7 +108,8 @@ test('Send to WoW keeps the store and regenerates Data.lua',async()=>{
   const s=await a.status();
   assert.equal(s.sent.length,1);assert.equal(s.sent[0].results,6);assert.equal(s.last.written,true);
   await a.settings({autoSend:true,keep:2});
-  assert.deepEqual((await a.status()).settings,{autoSend:true,keep:2});
+  const settings=(await a.status()).settings;
+  assert.equal(settings.autoSend,true);assert.equal(settings.keep,2);
   await assert.rejects(a.settings({keep:0}),/Keep 1–10/);
   await a.remove(s.sent[0].id);
   assert.equal((await a.status()).sent.length,0);

@@ -63,6 +63,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto'}=await body(req);if(!['auto','nightly','source','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode));}
     if(req.method==='GET'&&route==='/api/wow')return json(res,200,await wow.status());
     if(req.method==='POST'&&route==='/api/wow/install')return json(res,200,await wow.install());
+    if(req.method==='POST'&&route==='/api/wow/uninstall')return json(res,200,await wow.uninstall());
     if(req.method==='POST'&&route==='/api/wow/settings')return json(res,200,await wow.settings(await body(req)));
     if(req.method==='POST'&&route==='/api/wow/remove'){const {id}=await body(req);return json(res,200,await wow.remove(String(id)));}
     if(req.method==='GET'&&route==='/api/wow/captures')return json(res,200,await wow.captures());
