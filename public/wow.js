@@ -9,8 +9,11 @@ export function wowUI({api,notice,importText}){
   $('#history').insertAdjacentHTML('afterend',`<section id="wow-panel" class="panel" hidden><div class="panel-heading"><h2>SimCLab addon</h2><button id="wow-refresh" class="text-button">Refresh</button></div>
     <p class="panel-intro">The SimCLab addon shows your latest sims in the game: a results window (/simclab), the gear farm from Upgrade Finder on the Encounter Journal and at dungeon entrances, simulated gains in item tooltips, and the best choice in the Great Vault and loot rolls. The app installs it, keeps it up to date and writes its data file. After sending, type /reload in the game.</p>
     <div id="wow-status"><p class="hint">Looking for World of Warcraft …</p></div></section>`);
-  $('#example').insertAdjacentHTML('beforebegin','<button id="wow-import" class="text-button">Import from WoW ↙</button>');
-  $('#character').insertAdjacentHTML('beforebegin','<div id="wow-captures" class="wow-captures" hidden></div>');
+  // Characters read straight out of the game's SavedVariables, beside the field you can still paste into.
+  $('#character').insertAdjacentHTML('beforebegin',`<div id="wow-characters" class="wow-characters" hidden>
+    <label class="field-label" for="wow-character">CHARACTERS FROM WOW</label>
+    <div class="wow-character-row"><select id="wow-character"></select><button id="wow-character-load" class="button small secondary">Load</button></div>
+    <p class="hint" id="wow-character-hint"></p></div>`);
 
   function render(s){
     status=s;
@@ -66,21 +69,57 @@ export function wowUI({api,notice,importText}){
     return `<div class="wow-send"><button class="button small secondary" data-wow-send="${esc(job.id)}">Send to WoW</button><span class="wow-send-result hint"></span></div>`;
   }
 
-  // Import from WoW: captured /simc exports, newest first.
-  $('#wow-import').addEventListener('click',async()=>{
-    const box=$('#wow-captures');
+  // Characters from the game: read on every start, kept fresh while the app is open, loaded into the
+  // character field with one choice. The game writes them at logout and /reload.
+  let characters=[],signature='';
+  const ago=unix=>{
+    const seconds=Math.max(0,Math.floor(Date.now()/1000)-unix);
+    if(seconds<90)return 'just now';
+    if(seconds<5400)return `${Math.round(seconds/60)} minutes ago`;
+    if(seconds<172800)return `${Math.round(seconds/3600)} hours ago`;
+    return when(unix);
+  };
+  function describe(c){
+    if(!c)return '';
+    return `${esc(c.spec||'')} ${esc(c.name)} of ${esc(c.realm)}, captured ${esc(ago(c.time))} by ${esc(c.source)}.${c.checksum===false?' The export\'s checksum does not match, so it may have been edited.':''}`;
+  }
+  async function load(character,{quiet=false}={}){
+    if(!character)return;
+    try{await importText(character.text);$('#wow-character-hint').innerHTML=describe(character);}
+    catch(e){if(!quiet)notice(e.message);}
+  }
+  function renderCharacters(data){
+    const next=JSON.stringify(data.characters.map(c=>[c.key,c.time]))+JSON.stringify(data.problems.map(p=>[p.reason,p.time]));
+    if(next===signature)return;
+    signature=next;characters=data.characters;
+    const select=$('#wow-character'),box=$('#wow-characters');
+    const chosen=select.value;
+    box.hidden=!characters.length&&!data.problems.length;
+    select.innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm)} · ${esc(c.spec||'')}</option>`).join('')||'<option value="">No characters yet</option>';
+    select.disabled=!characters.length;
+    $('#wow-character-load').disabled=!characters.length;
+    if(characters.some(c=>c.key===chosen))select.value=chosen;
+    const problem=data.problems[0];
+    $('#wow-character-hint').innerHTML=characters.length?describe(characters.find(c=>c.key===select.value))
+      :problem?`The game could not build an export for ${esc(problem.name||'your character')}: ${esc(problem.reason)}`
+      :'Install the addon under WoW addon, log in and type /reload. Your characters then appear here by themselves.';
+    return characters.find(c=>c.key===select.value);
+  }
+  async function refreshCharacters({autoLoad=false}={}){
     try{
-      const list=await api('/api/wow/captures');
-      box.hidden=false;
-      box.innerHTML=list.length?`<p class="hint">Exports captured in the game (newest first). The export is refreshed on every logout and /reload.</p>${list.map((c,i)=>`<button class="history-row" data-capture="${i}"><span><strong>${esc(c.name)}</strong><small>${esc(c.realm)} · ${esc(c.spec)} · ${esc(when(c.time))} · account ${esc(c.account)}${c.checksum===false?' · checksum does not match':''}</small></span><span class="pill">Use</span></button>`).join('')}<button class="text-button" data-capture-close>Close</button>`
-        :`<p class="hint">No captured exports yet. Install the SimCLab addon (WoW addon in the menu) and the official SimulationCraft addon, log in, then /reload or log out. The export is stored in the game's SavedVariables.</p><button class="text-button" data-capture-close>Close</button>`;
-      box.onclick=async ev=>{
-        if(ev.target.closest('[data-capture-close]')){box.hidden=true;return;}
-        const i=ev.target.closest('[data-capture]')?.dataset.capture;if(i===undefined)return;
-        try{await importText(list[Number(i)].text);box.hidden=true;}catch(err){notice(err.message);}
-      };
-    }catch(e){notice(e.message);}
+      const newest=renderCharacters(await api('/api/wow/captures'));
+      // On a fresh start with nothing pasted, the newest character is loaded straight away.
+      if(autoLoad&&newest&&!$('#profile').value.trim())await load(newest,{quiet:true});
+    }catch{}
+  }
+  $('#wow-character').addEventListener('change',()=>{
+    const c=characters.find(x=>x.key===$('#wow-character').value);
+    $('#wow-character-hint').innerHTML=describe(c);
+    load(c);
   });
+  $('#wow-character-load').addEventListener('click',()=>load(characters.find(c=>c.key===$('#wow-character').value)));
+  setInterval(()=>{if(!document.hidden)refreshCharacters();},15000);
+  window.addEventListener('focus',()=>refreshCharacters());
 
-  return {refresh,sendButton,shown:()=>refresh()};
+  return {refresh,sendButton,characters:refreshCharacters,shown:()=>refresh()};
 }

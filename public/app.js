@@ -95,7 +95,7 @@ async function init(){
     $('#wow-version').textContent=engine.installed||'Not found';$('#side-version').textContent=engine.version?`SimulationCraft ${engine.version}`:'Not installed';$('#engine-badge').textContent=engine.compatible&&engine.ready?'Live build verified':engine.ready?'Update SimC for your WoW version':'SimC not installed';$('#engine-badge').classList.toggle('warning',!engine.compatible||!engine.ready);
     // Without an engine only the install screen is useful.
     if(engineView.missing()){$('#workspace').hidden=true;return;}
-    await Promise.all([environment.init(),upgrades.init()]);tank.init(environment.options()||{tankPresets:{}});$('#threads').value=engine.maxThreads;$('#threads').max=engine.maxThreads;if(engine.installed&&!engine.compatible)notice(`WoW ${engine.installed} and SimC ${engine.wowVersion} differ. Use Update SimC.`);renderVariants();try{$('#profile').value=localStorage.getItem('simc-lab-profile')||'';}catch{}if($('#profile').value)await importProfile();updateCount();}catch(e){notice(e.message);}
+    await Promise.all([environment.init(),upgrades.init()]);tank.init(environment.options()||{tankPresets:{}});$('#threads').value=engine.maxThreads;$('#threads').max=engine.maxThreads;if(engine.installed&&!engine.compatible)notice(`WoW ${engine.installed} and SimC ${engine.wowVersion} differ. Use Update SimC.`);renderVariants();try{$('#profile').value=localStorage.getItem('simc-lab-profile')||'';}catch{}if($('#profile').value)await importProfile();void wow.characters({autoLoad:true});updateCount();}catch(e){notice(e.message);}
 }
 init();
 

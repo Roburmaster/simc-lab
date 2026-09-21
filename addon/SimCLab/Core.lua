@@ -468,24 +468,45 @@ end
 
 -- Stores the official SimulationCraft addon's own /simc export, so SimC Lab can import the character without
 -- copy and paste. SimCLab does not build an export itself: parity with that addon is not realistic.
+-- Why it fails is written down as well: the app shows it, instead of the character simply never appearing.
+local function captureFailed(why)
+  SimCLabDB.captureStatus = { ok = false, reason = why, time = time(), name = UnitName("player"), realm = GetRealmName() }
+  return false, why
+end
+
 function ns.Capture()
+  if InCombatLockdown and InCombatLockdown() then return captureFailed("you are in combat") end
   local api = SimulationcraftAPI
-  if type(api) ~= "table" or type(api.GetSimcProfile) ~= "function" then
-    return false, "the SimulationCraft addon is not loaded"
+  local profile, source, why
+  -- The official addon's export is the reference, so it wins whenever it is there.
+  if type(api) == "table" and type(api.GetSimcProfile) == "function" then
+    local ok, text, problem = pcall(api.GetSimcProfile, nil, false, false, false, false)
+    if not ok then why = "SimulationCraft failed: " .. tostring(text)
+    elseif problem then why = tostring(problem)
+    elseif type(text) ~= "string" or text == "" then why = "SimulationCraft returned no export"
+    else
+      -- That export doubles pipes for its edit box; the text SimC reads has single ones.
+      profile = text:gsub("||", "|")
+      source = "SimulationCraft addon"
+    end
   end
-  if InCombatLockdown and InCombatLockdown() then return false, "you are in combat" end
-  local ok, profile, problem = pcall(api.GetSimcProfile, nil, false, false, false, false)
-  if not ok then return false, "SimulationCraft failed: " .. tostring(profile) end
-  if problem then return false, tostring(problem) end
-  if type(profile) ~= "string" or profile == "" then return false, "SimulationCraft returned no export" end
-  -- The export doubles pipes for its edit box; the text SimC reads has single ones.
-  profile = profile:gsub("||", "|")
+  -- Without it, SimCLab writes the export itself.
+  if not profile then
+    local ok, text, problem = pcall(ns.BuildProfile)
+    if ok and type(text) == "string" and text ~= "" then
+      profile, source = text, "SimCLab"
+    else
+      local ours = (not ok and ("the export failed: " .. tostring(text))) or tostring(problem or "the export could not be built")
+      return captureFailed(why and (why .. "; and SimCLab's own export: " .. ours) or ours)
+    end
+  end
   local _, specName = specInfo()
   local captures = SimCLabDB.captures
   captures[ns.PlayerKey()] = {
-    text = profile, time = time(), name = UnitName("player"), realm = GetRealmName(), spec = specName,
+    text = profile, time = time(), name = UnitName("player"), realm = GetRealmName(), spec = specName, source = source,
     simc = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("Simulationcraft", "Version") or nil,
   }
+  SimCLabDB.captureStatus = { ok = true, source = source, time = time(), name = UnitName("player"), realm = GetRealmName() }
   -- Keep the file small: at most 20 characters, newest first.
   local keys = {}
   for key, c in pairs(captures) do keys[#keys + 1] = { key = key, time = type(c) == "table" and tonumber(c.time) or 0 } end
@@ -514,6 +535,20 @@ function ns.WowMismatch(sim)
   return nil
 end
 
+-- The export is captured while the character is standing in the world, not only at logout: the game writes
+-- SavedVariables at logout and /reload either way, and at logout half the API is already on its way out.
+-- Several events in a row share one capture.
+local captureQueued = false
+function ns.ScheduleCapture(delay)
+  if captureQueued or not (SimCLabDB and SimCLabDB.settings.capture) then return end
+  captureQueued = true
+  C_Timer.After(delay, function()
+    captureQueued = false
+    if InCombatLockdown and InCombatLockdown() then ns.captureAfterCombat = true return end
+    ns.Capture()
+  end)
+end
+
 local events = CreateFrame("Frame")
 ns.eventFrame = events
 events:RegisterEvent("ADDON_LOADED")
@@ -522,6 +557,8 @@ events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
+events:RegisterEvent("TRAIT_CONFIG_UPDATED")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == addonName then
     initDB()
@@ -536,16 +573,26 @@ events:SetScript("OnEvent", function(_, event, arg1)
       ns.InvalidateGear()
       ns.Fire("gear")
     end)
+    ns.ScheduleCapture(12)
   elseif event == "PLAYER_LOGOUT" then
     if SimCLabDB and SimCLabDB.settings.capture then ns.Capture() end
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     if arg1 == nil or arg1 == "player" then
       ns.BuildIndex()
       ns.Fire("player")
+      ns.ScheduleCapture(20)
+    end
+  elseif event == "TRAIT_CONFIG_UPDATED" then
+    ns.ScheduleCapture(20)
+  elseif event == "PLAYER_REGEN_ENABLED" then
+    if ns.captureAfterCombat then
+      ns.captureAfterCombat = false
+      ns.ScheduleCapture(5)
     end
   elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "BAG_UPDATE_DELAYED" then
     ns.InvalidateGear()
     ns.Fire("gear")
+    if event == "PLAYER_EQUIPMENT_CHANGED" then ns.ScheduleCapture(20) end
   end
   ns.Fire("event", event, arg1)
 end)
@@ -554,7 +601,7 @@ end)
 -- Slash command
 -------------------------------------------------------------------------------
 
-local toggles = { tooltip = "item tooltips", entrance = "the farm at dungeon and raid entrances", journal = "the farm on the Encounter Journal", vault = "Great Vault highlights", loot = "loot roll highlights", capture = "capturing the SimulationCraft export at logout" }
+local toggles = { tooltip = "item tooltips", entrance = "the farm at dungeon and raid entrances", journal = "the farm on the Encounter Journal", vault = "Great Vault highlights", loot = "loot roll highlights", capture = "capturing the character export for SimC Lab" }
 
 SLASH_SIMCLAB1 = "/simclab"
 SlashCmdList.SIMCLAB = function(message)
