@@ -1,0 +1,42 @@
+name: Addon release
+
+# The WoW addon has its own release channel, so a fix for the game needs no new app version. A tag named
+# addon-v1.2.3 publishes addon.json (which installed apps read) and a zip for manual installs. No installer
+# is built here, and the release environment still waits for the owner's approval.
+on:
+  push:
+    tags: ['addon-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  addon:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Test dependencies (Lua parser and VM for the addon tests)
+        run: npm ci
+      - name: Tag must match the addon's TOC version
+        shell: bash
+        run: |
+          version=$(grep -m1 '^## Version:' addon/SimCLab/SimCLab.toc | sed 's/.*: *//' | tr -d '\r')
+          test "addon-v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match addon version $version"; exit 1; }
+      - name: App and addon tests (no SimC installation)
+        run: npm run test:ci
+      - name: Pack the addon
+        run: node scripts/pack-addon.mjs dist/addon
+      - name: Publish the addon release
+        working-directory: dist/addon
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" addon.json SimCLab-addon.zip --verify-tag --title "SimCLab addon ${{ github.ref_name }}" --notes "The SimCLab World of Warcraft addon. SimC Lab installs it for you; this release is what it downloads, and the zip is for installing it by hand."

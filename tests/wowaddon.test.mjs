@@ -11,7 +11,7 @@ const retail=path.join(temp,'World of Warcraft','_retail_');
 const addons=path.join(retail,'Interface','AddOns');
 process.env.SIMC_LAB_HOME=path.join(temp,'home');
 process.env.SIMC_LAB_WOW_DIR=retail;
-const {WowAddon,readToc,compareVersions,checksumOk,shippedDir,locate}=await import('../lib/wowaddon.mjs');
+const {WowAddon,readToc,compareVersions,checksumOk,shippedDir,locate,validateManifest,releasesUrl}=await import('../lib/wowaddon.mjs');
 const {identity,simEntry,trackTable}=await import('../lib/wowdata.mjs');
 test.after(()=>fs.rm(temp,{recursive:true,force:true}));
 
@@ -164,4 +164,122 @@ test('a character the game could not export says why it is missing',async()=>{
     const {problems}=await addon().captures();
     assert.deepEqual(problems.map(p=>[p.account,p.name,p.reason]),[['ACCOUNT3','Temulan','the SimulationCraft addon is not installed or not enabled']]);
   }finally{await fs.rm(path.join(retail,'WTF','Account','ACCOUNT3'),{recursive:true,force:true});}
+});
+
+// ---------------------------------------------------------------------------
+// The addon's own release channel: a fix for the game without a new app
+// ---------------------------------------------------------------------------
+
+const {buildManifest,sha256}=await import('../scripts/pack-addon.mjs');
+
+// The shipped addon, published as its own release with a higher version.
+async function publish(version,change=m=>m){
+  const manifest=await buildManifest();
+  manifest.version=version;
+  for(const file of manifest.files){
+    if(file.path===`SimCLab.toc`){
+      file.text=file.text.replace(/^## Version: .*$/m,`## Version: ${version}`);
+      file.bytes=Buffer.byteLength(file.text,'utf8');
+      file.sha256=sha256(file.text);
+    }
+  }
+  return change(manifest);
+}
+// A GitHub that answers with the releases and manifest a test hands it.
+function githubServing(manifest,{releases,manifestStatus=200}={}){
+  const calls=[];
+  const body=JSON.stringify(manifest);
+  const list=releases||[
+    {tag_name:'v9.9.9',draft:false,assets:[{name:'addon.json',size:10,browser_download_url:'https://example.invalid/app.json'}]},
+    {tag_name:'addon-v'+manifest.version,draft:false,published_at:'2026-09-21T10:00:00Z',assets:[{name:'SimCLab-addon.zip',size:1,browser_download_url:'https://example.invalid/zip'},{name:'addon.json',size:body.length,browser_download_url:'https://example.invalid/addon.json'}]},
+  ];
+  const fetchImpl=async url=>{
+    calls.push(String(url));
+    if(String(url).startsWith(releasesUrl))return {ok:true,status:200,json:async()=>list};
+    if(String(url)==='https://example.invalid/addon.json')return {ok:manifestStatus===200,status:manifestStatus,text:async()=>body};
+    return {ok:false,status:404,text:async()=>''};
+  };
+  return {fetchImpl,calls};
+}
+const onlineAddon=fetchImpl=>new WowAddon({installDir:async()=>null,context:async()=>({tracks,app:'9.9.9'}),fetchImpl});
+
+test('a manifest is refused unless it is whole and built for this app',async()=>{
+  const good=await publish('9.0.0');
+  assert.equal(validateManifest(good).version,'9.0.0');
+  const broken=[
+    [m=>({...m,addon:'Something'}),/another addon/],
+    [m=>({...m,schemaVersion:99}),/data schema 99/],
+    [m=>({...m,version:'nine'}),/no version/],
+    [m=>({...m,files:m.files.map(f=>f.path==='Core.lua'?{...f,text:f.text+'\n-- sneaky'}:f)}),/does not match its checksum/],
+    [m=>({...m,files:[...m.files,{path:'../../evil.lua',text:'x',sha256:sha256('x'),bytes:1}]}),/unusable path/],
+    [m=>({...m,files:[...m.files,{path:'C:/evil.lua',text:'x',sha256:sha256('x'),bytes:1}]}),/unusable path|unexpected file/],
+    [m=>({...m,files:[...m.files,{path:'evil.exe',text:'x',sha256:sha256('x'),bytes:1}]}),/unexpected file/],
+    [m=>({...m,files:m.files.filter(f=>f.path!=='SimCLab.toc')}),/no TOC/],
+    [m=>({...m,version:'9.0.1'}),/TOC version and the manifest version differ/],
+  ];
+  for(const [change,message] of broken)assert.throws(()=>validateManifest(change(structuredClone(good))),message,String(message));
+});
+
+test('the newest addon release is found on GitHub and installed on its own',async()=>{
+  await addon().install();
+  const manifest=await publish('9.0.0');
+  const {fetchImpl,calls}=githubServing(manifest);
+  const a=onlineAddon(fetchImpl);
+  const online=await a.checkOnline({force:true});
+  assert.equal(online.manifest.version,'9.0.0');
+  assert.equal(online.tag,'addon-v9.0.0','app releases are skipped');
+  const before=await a.status();
+  assert.equal(before.newest,'9.0.0');assert.equal(before.fromGitHub,true);assert.equal(before.updateAvailable,true);
+  const after=await a.installOnline(online.manifest);
+  assert.equal(after.installed,'9.0.0');
+  assert.equal(after.updateAvailable,false);
+  assert.match(await fs.readFile(path.join(addons,'SimCLab','UI','Window.lua'),'utf8'),/SimC Lab/);
+  assert.ok(await exists(path.join(addons,'SimCLab','Data.lua')),'the data file is written again afterwards');
+  assert.equal(calls.filter(u=>u.startsWith(releasesUrl)).length,1);
+  // Back to the shipped copy for the tests that follow.
+  await addon().install();
+});
+
+test('a checked check is remembered, and problems are reported rather than thrown',async()=>{
+  const a=onlineAddon(async()=>{throw new Error('offline');});
+  const online=await a.checkOnline({force:true});
+  assert.match(online.error,/offline/);
+  assert.equal((await a.status()).online.error,online.error);
+  assert.equal((await a.status()).updateAvailable,false,'a failed check never claims an update');
+  const empty=onlineAddon(async()=>({ok:true,status:200,json:async()=>[{tag_name:'v1.0.0',draft:false,assets:[]}]}));
+  assert.match((await empty.checkOnline({force:true})).error,/No addon release/);
+  const noAsset=onlineAddon(async()=>({ok:true,status:200,json:async()=>[{tag_name:'addon-v9.0.0',draft:false,assets:[]}]}));
+  assert.match((await noAsset.checkOnline({force:true})).error,/no addon.json/);
+});
+
+test('automatic updates take the newer of the shipped copy and the addon release, and can be turned off',async()=>{
+  const shipped=(await readToc(shippedDir)).version;
+  const manifest=await publish('9.1.0');
+  const {fetchImpl,calls}=githubServing(manifest);
+  const a=onlineAddon(fetchImpl);
+  await a.install();
+  assert.equal((await a.status()).installed,shipped);
+  assert.equal(await a.autoUpdate(),true,'the published addon is newer');
+  assert.equal((await a.status()).installed,'9.1.0');
+  assert.equal(await a.autoUpdate(),false,'nothing left to do');
+  // Turned off, GitHub is never asked.
+  await a.settings({online:false});
+  const quiet=onlineAddon(async()=>{throw new Error('should not be called');});
+  await quiet.uninstall();
+  await quiet.setManage(true);
+  assert.equal(await quiet.autoUpdate(),true,'the shipped copy still installs');
+  assert.equal((await quiet.status()).installed,shipped);
+  assert.equal((await quiet.checkOnline({force:true})).disabled,true);
+  await a.settings({online:true});
+  assert.ok(calls.length>0);
+});
+
+test('an addon built for another data schema is never installed',async()=>{
+  const manifest=await publish('9.2.0',m=>({...m,schemaVersion:2}));
+  const {fetchImpl}=githubServing(manifest);
+  const a=onlineAddon(fetchImpl);
+  const online=await a.checkOnline({force:true});
+  assert.match(online.error,/data schema 2/);
+  assert.equal((await a.status()).newest,(await readToc(shippedDir)).version,'the app keeps its own copy');
+  await assert.rejects(a.installOnline(manifest),/data schema 2/);
 });
