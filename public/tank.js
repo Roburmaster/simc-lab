@@ -4,8 +4,14 @@ const fields=[['pressure','Sustained damage (% health / sec)',0.5,20,0.5],['bust
 export const signed=(n,digits=2)=>`${n>=0?'+':''}${n.toFixed(digits)}`;
 
 export function tankUI({updateCount}){
-  let presets=null,active=false;
-  $('#results').insertAdjacentHTML('beforebegin',`<section class="panel" id="tank-panel" hidden><div class="panel-heading"><h2>Tank survival</h2><span class="pill">Tank specialization</span></div><p class="panel-intro">Tanks are ranked on DPS and survival. A boss is calibrated to your imported gear once per job, then every build fights the same boss.</p><div id="tank-content"></div></section>`);
+  let presets=null,active=false,weapons=false;
+  $('#results').insertAdjacentHTML('beforebegin',`<section class="panel" id="tank-panel" hidden><div class="panel-heading"><h2>Tank survival</h2><span class="pill" id="tank-scope">Tank specialization</span></div><p class="panel-intro" id="tank-intro">Tanks are ranked on DPS and survival. A boss is calibrated to your imported gear once per job, then every build fights the same boss.</p><div id="tank-content"></div></section>`);
+  // The same settings serve one imported tank and every tank specialization in a Weapon Lab job.
+  function scope(){
+    $('#tank-panel').hidden=!(active||weapons);
+    $('#tank-scope').textContent=weapons?'Every tank specialization':'Tank specialization';
+    $('#tank-intro').textContent=weapons?'Tank specializations are ranked on DPS and survival. A boss is calibrated once for each of their reference profiles, then every weapon fights that boss.':'Tanks are ranked on DPS and survival. A boss is calibrated to your imported gear once per job, then every build fights the same boss.';
+  }
   function render(){
     $('#tank-content').innerHTML=`<div class="two-col"><label>Boss<select id="tank-preset">${Object.entries(presets).map(([key,p])=>`<option value="${key}" ${key==='mythic'?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label><label>Ranking weight<input id="tank-weight" type="range" min="0" max="100" step="5" value="50"><span class="hint" id="tank-weight-label"></span></label></div>
       <details class="environment-detail"><summary>Boss details</summary><div class="tank-fields">${fields.map(([key,label,min,max,step])=>`<label>${label}<input type="number" data-tank="${key}" min="${min}" max="${max}" step="${step}"></label>`).join('')}</div><p class="hint">The sustained damage and tank-buster sizes are measured after your mitigation. The buster is then resized until your current gear dies in the chosen share of fights, so better gear can survive more often and worse gear less often. Healers top you up to full health on a fixed rhythm; SimC does not time your defensives to the tank-busters.</p></details>
@@ -19,9 +25,10 @@ export function tankUI({updateCount}){
   function label(){const w=Number($('#tank-weight').value);$('#tank-weight-label').textContent=`${w}% survival · ${100-w}% DPS`;}
   return {
     init(options){presets=options.tankPresets;render();},
-    show(profile){active=!!profile?.isTank;$('#tank-panel').hidden=!active;},
+    show(profile){active=!!profile?.isTank;scope();},
+    forWeapons(on){weapons=!!on;scope();},
     settings(){
-      if(!active||!presets)return undefined;
+      if(!(active||weapons)||!presets)return undefined;
       const result={preset:$('#tank-preset').value,weight:Number($('#tank-weight').value)};
       for(const [key] of fields){const value=$(`[data-tank="${key}"]`).value;if(value!=='')result[key]=Number(value);}
       return result;

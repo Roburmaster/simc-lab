@@ -1,7 +1,7 @@
 // What the engine is doing right now: a bar in the header on every page, and the shared wording for a job's
 // progress. Jobs run one at a time; everything else waits in the queue.
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const names={quick:'Quick Sim',enchants:'Enchant Lab',compare:'Gear Compare',upgrades:'Upgrade Finder',talents:'Talent Search'};
+const names={quick:'Quick Sim',enchants:'Enchant Lab',compare:'Gear Compare',upgrades:'Upgrade Finder',weapons:'Weapon Lab',talents:'Talent Search'};
 
 export function duration(seconds){
   if(!Number.isFinite(seconds)||seconds<0)return '';

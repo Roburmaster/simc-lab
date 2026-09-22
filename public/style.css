@@ -31,6 +31,20 @@
 .result-table td.upgrade-source-cell{text-align:left;white-space:normal;max-width:260px}
 .result-table td.upgrade-source-cell small{margin-top:0;margin-bottom:4px}
 @media(max-width:700px){.upgrade-source{grid-template-columns:1fr auto}.upgrade-source>span:first-child{grid-column:1/-1}}
+.weapon-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}
+.weapon-specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px;max-height:340px;overflow:auto}
+.weapon-class h4{margin:0 0 6px}
+.weapon-specs .check{margin-bottom:4px;align-items:baseline}
+.weapon-specs .check small{color:var(--muted);font-size:10px;margin-left:4px}
+.weapon-spec{margin-top:18px;border:1px solid var(--line);border-radius:7px;padding:14px 16px;background:#141a25}
+.weapon-spec>summary{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:14px;color:#dbe3ef}
+.weapon-table td.weapon-rank{text-align:right;color:var(--muted);width:34px}
+.tier{display:inline-block;min-width:26px;text-align:center;padding:3px 7px;border-radius:5px;font-size:12px;font-weight:650;border:1px solid}
+.tier-S{background:#3a2f1c;border-color:#8a6a2f;color:#ffd181}
+.tier-A{background:#1e3328;border-color:#3f7a58;color:var(--green)}
+.tier-B{background:#1d2b3d;border-color:#3d5e85;color:#a8c8ef}
+.tier-C{background:#242a36;border-color:#3d475a;color:#b6c0d0}
+.tier-D{background:#2c2429;border-color:#5b4450;color:#c3aab4}
 
 .tank-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px}
 #tank-panel input[type=range]{padding:0;accent-color:var(--amber)}

@@ -1,6 +1,6 @@
 # SimC Lab
 
-A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
+A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, Weapon Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
 
 **Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
 
@@ -15,13 +15,15 @@ For development, run `npm run install-engine` once and then `npm start` (http://
 3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, or Talent Search.
 4. Set fight style, duration, target count, iterations and target error, then run the simulation.
 
+Weapon Lab is the exception: it ranks weapons for every specialization on SimulationCraft's own reference characters, so it runs without an import.
+
 All application text is English. Profiles and results remain on your PC.
 
 ## Midnight-only choices
 
 Gear, gems, enchants and consumables offered as new choices must be explicitly tagged as Midnight (expansion 11) in the cached public client-data catalog. There is no older-expansion toggle or item-ID cutoff. The backend also validates manual comparison variants.
 
-The catalog currently contains 3,521 current-expansion equippable items supported by the engine, 105 permanent enchants and 75 gems. Data is pinned to WoW 12.1.0.69814 and a content hash. Unknown provenance is rejected. Older items reissued in current-season dungeons are excluded from the item browser and Gear Compare. Upgrade Finder is the one exception: it offers them only through the active season's own raid and Mythic+ loot tables (see below).
+The catalog currently contains 3,521 current-expansion equippable items supported by the engine, 105 permanent enchants and 75 gems. Data is pinned to WoW 12.1.0.69814 and a content hash. Unknown provenance is rejected. Older items reissued in current-season dungeons are excluded from the item browser and Gear Compare. Upgrade Finder and Weapon Lab are the exceptions: they offer them only through the active season's own raid and Mythic+ loot tables (see below).
 
 Your actual imported baseline is preserved, including existing older gear. You can test a Midnight enchant or gem on an existing item without replacing the item's other properties. Existing old gems or enchants may remain unchanged in the baseline; they cannot be selected as new alternatives.
 
@@ -76,6 +78,17 @@ The addon captures the export shortly after login and again after gear, speciali
 The export comes from the official SimulationCraft addon when it is installed and enabled, because that addon is the reference and is updated with every patch. Without it, SimCLab writes the export itself (`addon/SimCLab/Export.lua`): the same format, with gear, enchants, gems, bonus IDs, crafted stats and crafting quality, talents and Omnium talents, saved loadouts, professions and bag items, ending in the same checksum. That format's authors released their addon into the public domain (the Unlicense), and this is SimC Lab's own implementation of it. The dropdown says which of the two wrote each character, and when neither could, the app shows what the game reported instead of leaving the character out. The SavedVariables file is parsed as data only, never executed, and the profile goes through the normal import checks. Turn the capture off with `/simclab capture off`.
 
 **MPCombat.** SimCLab stands alone and has no dependencies. It does not integrate with MPCombat; that could be offered later as an optional extra on MPCombat's side.
+## Weapon Lab
+
+Weapon Lab answers which weapon, off-hand, shield or held item a specialization should chase, as one tier list per specialization. It needs no character import: each specialization is carried by SimulationCraft's own reference profile, taken from the newest season folder in the installed engine that has one, with its stored action list dropped so every candidate uses the engine's current default rotation. Healing specializations have no reference profile and cannot be ranked. Reference profiles may use a few engine options an addon export never has, such as a starting resource or the time of day; those are accepted only from the engine folder, never from a pasted import.
+
+The candidates are the weapons in the active season's loot tables — the same pool as Upgrade Finder, including reissued older dungeon and raid items — filtered for the specialization exactly as Upgrade Finder filters them, and placed like for like with what the reference profile wields: a two-hander replaces a two-hander, a shield replaces a shield, and an off-hand candidate needs an equipped off-hand. Titan's Grip allows both. Categories can be narrowed to main hand, off-hand weapons, shields and held items.
+
+Every candidate is pinned to one upgrade track and level, so the ranking measures the weapon and not where it dropped. The reference profile's weapon enchant carries over, and existing gems carry over into sockets the new item already has. The reference character's own weapon stays as the profileset baseline and is reported with the results.
+
+Each specialization runs on its own. A list no longer than the final round size is simulated once with your iteration and target-error settings; a longer one is screened first at up to 2,000 iterations and a 0.5% target error, and the best 12, 24 or 48 go on to the full round. Screening-only numbers are labelled. Tank specializations are ranked on the same weighted DPS and survival score as the rest of the app, with a boss calibrated once for each of them, so shields can be judged on more than damage. A job is limited to 2,400 candidate runs, counting every scenario.
+
+Tiers measure the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons within the combined 95% uncertainty of the best one are marked as such. Absolute numbers are comparable within a specialization only; reference profiles are built by different authors and are not a class ranking.
 
 ## Tank simulation
 
@@ -107,7 +120,7 @@ The search is bounded and deterministic. It is not exhaustive, adaptive across s
 
 Results include DPS, differences from baseline, approximate 95% confidence intervals, actual SimC input and downloadable HTML/JSON reports. The History tab persists completed jobs across server restarts. Unfinished jobs are marked interrupted after a restart.
 
-Jobs run sequentially with configurable CPU threads. Limits are 128 alternative builds, 256 runs per job (Upgrade Finder: 800 candidates, two profileset runs per scenario) and 5 queued/running jobs. Active and queued jobs can be cancelled. Files are stored in runs/; the import field is also remembered in browser localStorage.
+Jobs run sequentially with configurable CPU threads. Limits are 128 alternative builds, 256 runs per job (Upgrade Finder: 800 candidates, two profileset runs per scenario; Weapon Lab: 2,400 candidate runs, one or two profileset runs per specialization and scenario) and 5 queued/running jobs. Active and queued jobs can be cancelled. Files are stored in runs/; the import field is also remembered in browser localStorage.
 
 The server listens only on 127.0.0.1, verifies Host and POST tokens, rejects file/network/output directives in profile imports, and launches SimC without a shell. The compiled engine has networking disabled.
 
@@ -158,6 +171,7 @@ The default WoW build file is C:\Program Files (x86)\World of Warcraft\.build.in
     npm test
     node tests/integration.mjs
     node tests/upgrade-integration.mjs
+    node tests/weapon-integration.mjs
     node tests/tank-integration.mjs
     node tests/english-browser.cjs
 
