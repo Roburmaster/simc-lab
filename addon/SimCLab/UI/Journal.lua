@@ -60,10 +60,10 @@ end
 
 local function farmPanel(name, parent, rows)
   local p = UI.Panel(name, parent, 300, 72 + rows * 30)
-  p.title = UI.Text(p, "GameFontNormal")
+  p.title = UI.OneLine(UI.Text(p, "GameFontNormal"))
   p.title:SetPoint("TOPLEFT", 10, -10)
   p.title:SetPoint("TOPRIGHT", -28, -10)
-  p.subtitle = UI.Text(p, "GameFontDisableSmall")
+  p.subtitle = UI.OneLine(UI.Text(p, "GameFontDisableSmall"))
   p.subtitle:SetPoint("TOPLEFT", 10, -28)
   p.subtitle:SetPoint("TOPRIGHT", -10, -28)
   p.list = UI.List(p, rows)

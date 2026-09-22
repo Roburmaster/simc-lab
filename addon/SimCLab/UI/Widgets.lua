@@ -47,6 +47,14 @@ function UI.Text(parent, font, justify)
   return fs
 end
 
+-- A font string anchored on both sides has a width, and then a long line wraps onto the next one. In a fixed
+-- row that second line lands on top of the text below it, so text that must stay on one line is cut instead.
+function UI.OneLine(fs)
+  if fs.SetWordWrap then fs:SetWordWrap(false) end
+  if fs.SetMaxLines then fs:SetMaxLines(1) end
+  return fs
+end
+
 function UI.Button(parent, text, width, height)
   local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
   b:SetSize(width or 80, height or 22)
@@ -146,6 +154,8 @@ end
 -------------------------------------------------------------------------------
 
 local ROW = 30
+-- The column the gain and its note are drawn in. The title and detail end where it starts.
+local VALUE_WIDTH = 96
 
 local function itemName(result)
   local name = result.name or ("Item " .. tostring(result.itemId))
@@ -165,14 +175,16 @@ local function createRow(list, index)
   row.check:SetPoint("LEFT", 2, 0)
   row.icon = row:CreateTexture(nil, "ARTWORK")
   row.icon:SetSize(24, 24)
-  row.title = UI.Text(row, "GameFontHighlight")
-  row.title:SetPoint("TOPRIGHT", row, "TOPRIGHT", -96, -2)
-  row.detail = UI.Text(row, "GameFontDisableSmall")
-  row.detail:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -96, 3)
-  row.value = UI.Text(row, "GameFontHighlight", "RIGHT")
+  row.title = UI.OneLine(UI.Text(row, "GameFontHighlight"))
+  row.title:SetPoint("TOPRIGHT", row, "TOPRIGHT", -VALUE_WIDTH, -2)
+  row.detail = UI.OneLine(UI.Text(row, "GameFontDisableSmall"))
+  row.detail:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -VALUE_WIDTH, 3)
+  row.value = UI.OneLine(UI.Text(row, "GameFontHighlight", "RIGHT"))
   row.value:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -2)
-  row.valueDetail = UI.Text(row, "GameFontDisableSmall", "RIGHT")
+  row.value:SetWidth(VALUE_WIDTH - 12)
+  row.valueDetail = UI.OneLine(UI.Text(row, "GameFontDisableSmall", "RIGHT"))
   row.valueDetail:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -6, 3)
+  row.valueDetail:SetWidth(VALUE_WIDTH - 12)
   row.line = row:CreateTexture(nil, "BACKGROUND")
   row.line:SetColorTexture(1, 1, 1, 0.05)
   row.line:SetPoint("BOTTOMLEFT")
@@ -235,10 +247,10 @@ local function drawRow(row, d)
   end
   row.title:ClearAllPoints()
   row.title:SetPoint("TOPLEFT", row, "TOPLEFT", left, d.header and -8 or -2)
-  row.title:SetPoint("TOPRIGHT", row, "TOPRIGHT", -96, -2)
+  row.title:SetPoint("TOPRIGHT", row, "TOPRIGHT", -VALUE_WIDTH, -2)
   row.detail:ClearAllPoints()
   row.detail:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", left, 3)
-  row.detail:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -96, 3)
+  row.detail:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -VALUE_WIDTH, 3)
   row.title:SetFontObject(d.header and "GameFontNormal" or "GameFontHighlight")
   row.title:SetText(d.title or "")
   row.title:SetAlpha(d.dim and 0.55 or 1)
