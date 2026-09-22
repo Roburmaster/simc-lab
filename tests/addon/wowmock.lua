@@ -69,6 +69,10 @@ function Widget:UnregisterEvent(event) self.__events[event] = nil end
 function Widget:SetText(text) self.__text = text end
 function Widget:GetText() return self.__text end
 function Widget:SetFormattedText(fmt, ...) self.__text = string.format(fmt, ...) end
+-- Recorded rather than ignored: a row that lets its text wrap draws the second line over the row below.
+function Widget:SetWordWrap(on) self.__wrap = on and true or false end
+function Widget:SetMaxLines(n) self.__maxLines = n end
+function Widget:SetWidth(width) self.__width = width end
 function Widget:SetChecked(v) self.__checked = v and true or false end
 function Widget:GetChecked() return self.__checked or false end
 function Widget:SetEnabled(v) self.__enabled = v and true or false end

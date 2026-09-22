@@ -192,6 +192,16 @@ test('the gear farm groups by source, ranks by gain and keeps a checklist',async
   w.close();
 });
 
+test('a long item name stays on its own line instead of covering the line below',async()=>{
+  const w=await loaded();
+  await w.run('SlashCmdList.SIMCLAB("farm")');
+  for(const part of ['title','detail','value','valueDetail'])
+    assert.equal(await w.get(`SimCLabFrame.body.list.rows[1].${part}.__wrap`),false,`${part} must not wrap inside a fixed row`);
+  // The gain column has a width of its own, so a long note is cut there rather than reaching into the name.
+  assert.equal(await w.get('SimCLabFrame.body.list.rows[1].value.__width'),84);
+  w.close();
+});
+
 test('the Encounter Journal shows the farm for the instance and boss on display',async()=>{
   const w=await world({data:dataText()});
   await w.run(`${equip}
