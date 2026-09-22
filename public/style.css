@@ -72,3 +72,9 @@
 .wow-remove:hover{background:#4a3039}
 
 .wow-characters{margin-bottom:16px}.wow-characters .field-label{margin-top:0}.wow-character-row{display:flex;gap:8px;align-items:center}.wow-character-row select{flex:1}.wow-characters .hint{margin:8px 0 0}
+.slot-filter{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}
+.slot-chip{border:1px solid var(--line);background:#1b2230;color:#c5cedd;border-radius:20px;padding:6px 12px;font-size:12px}
+.slot-chip:hover{background:#26303f}
+.slot-chip span{color:var(--muted);margin-left:4px}
+.slot-chip.active{background:#302b23;border-color:#6d5a34;color:var(--amber)}
+.slot-chip.active span{color:var(--amber);opacity:.7}
