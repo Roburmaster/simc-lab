@@ -6,7 +6,7 @@ const number=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(
 const originNames={raid:'Raid',mplus:'Mythic+',delves:'Delves',vault:'Great Vault',crafted:'Crafted'};
 
 export function upgradeUI({api,notice,updateCount}){
-  let data=null,countTimer=null;
+  let data=null,countTimer=null,slotFilter='all',lastJob=null;
   $('#quick-info').insertAdjacentHTML('beforebegin',`<section id="upgrade-panel" class="panel" hidden><div class="panel-heading"><h2><span class="step">02</span> Upgrade Finder</h2><span id="upgrade-season" class="pill">Loading season</span></div><p class="panel-intro">Choose where you can get gear and at which upgrade level. Every usable item for your specialization is simulated in its slot, and the most promising ones are simulated again at full precision.</p><div id="upgrade-sources"><p class="hint">Loading loot tables …</p></div></section>`);
   const trackOptions=selected=>data.tracks.map(t=>`<option value="${t.id}" ${t.id===selected?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('');
   const levelOptions=(trackId,selected)=>(data.tracks.find(t=>t.id===Number(trackId))||data.tracks[0]).levels.map(l=>`<option value="${l.level}" ${l.level===selected?'selected':''}>${l.level}/${l.max} · item level ${l.itemLevel}</option>`).join('');
@@ -61,8 +61,22 @@ export function upgradeUI({api,notice,updateCount}){
     $('#upgrade-count').textContent='Counting candidates …';
     countTimer=setTimeout(async()=>{try{const preview=await api('/api/preview',request());$('#upgrade-count').innerHTML=`<strong>${preview.upgrade.candidates} candidates</strong> across ${preview.upgrade.slots} slots · ${preview.total} SimC runs`;}catch(e){$('#upgrade-count').textContent=e.message;}},350);
   }
+  // Rings and trinkets are simulated in both of their slots; the filter treats each pair as one slot.
+  const family=slot=>String(slot||'').replace(/[12]$/,'');
+  const familyNames={head:'Head',neck:'Neck',shoulder:'Shoulders',back:'Back',chest:'Chest',wrist:'Wrists',hands:'Hands',waist:'Waist',legs:'Legs',feet:'Feet',finger:'Rings',trinket:'Trinkets',main_hand:'Main hand',off_hand:'Off hand'};
+  // Picking a slot keeps every measured item for it, upgrades and the rest, in every list below.
+  function slotFilterBar(rows){
+    const counts=new Map();
+    for(const r of rows){const f=family(r.c.slot);counts.set(f,(counts.get(f)||0)+1);}
+    if(counts.size<2)return '';
+    const chip=(value,label,count)=>`<button class="slot-chip${slotFilter===value?' active':''}" data-slot-filter="${esc(value)}">${esc(label)}${count!==undefined?` <span>${count}</span>`:''}</button>`;
+    const order=Object.keys(familyNames).filter(f=>counts.has(f));
+    return `<div class="slot-filter">${chip('all','All slots',rows.length)}${order.map(f=>chip(f,familyNames[f]||f,counts.get(f))).join('')}</div>`;
+  }
+
   function results(job){
     if(!job.upgrade)return '';
+    lastJob=job;
     const candidates=new Map(job.upgrade.candidates.map(c=>[c.key,c]));const screen=job.upgrade.screen;
     let html=`<div class="search-summary"><strong>Upgrade Finder · ${job.upgrade.candidates.length} candidates · ${esc(job.upgrade.season?.name)}</strong><p class="hint">Screening: up to ${number(screen.iterations)} iterations, ${screen.targetError}% target error. Final round: up to ${job.upgrade.finalists} candidates with ${number(job.settings.iterations)} iterations and ${job.settings.targetError}% target error.</p></div>`;
     for(let s=0;s<job.scenarios.length;s++){
@@ -79,27 +93,43 @@ export function upgradeUI({api,notice,updateCount}){
         const id=c.slot.replace(/[12]$/,'')+'|'+c.value;const previous=best.get(id);
         if(!previous||row.stage>previous.stage||row.stage===previous.stage&&entry.rank>previous.rank)best.set(id,entry);
       }
-      const rows=[...best.values()].sort((a,b)=>b.stage-a.stage||b.rank-a.rank);
+      const measured=[...best.values()].sort((a,b)=>b.stage-a.stage||b.rank-a.rank);
+      const chosen=slotFilter==='all'?measured:measured.filter(r=>family(r.c.slot)===slotFilter);
+      const rows=chosen;
       const upgrades=rows.filter(r=>r.stage===2&&r.rank>0).sort((a,b)=>b.rank-a.rank);
       const scenario=job.scenarios[s];
       html+=`<section class="result-scenario"><h3>${esc(scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
       const base=baselines[2]||baselines[1];if(base)html+=`<p class="hint">Current gear: ${number(base.dps)} DPS${base.error95!==null?` ± ${number(base.error95)}`:''}</p>`;
+      html+=slotFilterBar(measured);
+      if(slotFilter!=='all')html+=`<p class="hint">${esc(familyNames[slotFilter]||slotFilter)}: every item measured for this slot, best first.${rows.length?'':' Nothing was measured for it in this job.'}</p>`;
       for(const st of stages){if(st.status==='failed')html+=`<p class="notice">${st.stage===1?'Screening':'Final round'} failed: ${esc(st.error)}</p>`;if(st.status==='skipped')html+=`<p class="hint">${esc(st.reason)}</p>`;}
       if(upgrades.length){
         const groups=new Map();
         for(const r of upgrades)for(const src of r.c.sources){const g=groups.get(src.group);if(!g||r.rank>g.r.rank)groups.set(src.group,{src,r});}
         html+=`<h4 class="upgrade-heading">Best upgrade per source</h4><div class="upgrade-source-list">${[...groups.values()].sort((a,b)=>b.r.rank-a.r.rank).map(({src,r})=>`<div class="upgrade-source"><span><small>${esc(originNames[src.origin])}</small><strong>${esc(src.groupName)}</strong></span><span>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · ${r.c.itemLevel}</small></span><b>+${r.rank.toFixed(2)}${r.tanky?'':' %'}</b></div>`).join('')}</div>`;
         html+=`<h4 class="upgrade-heading">All measured upgrades</h4>${table(upgrades)}`;
-      }else if(stages.some(st=>st.stage===2&&st.status==='complete'))html+='<p class="hint">No final-round candidate beat your current gear.</p>';
+      }else if(stages.some(st=>st.stage===2&&st.status==='complete'))html+=`<p class="hint">No final-round candidate beat your current gear${slotFilter==='all'?'':' in this slot'}.</p>`;
+      // With a slot picked, what lost in the final round is worth seeing too: that is the answer to
+      // "why is this item not here?".
+      const losers=rows.filter(r=>r.stage===2&&r.rank<=0);
+      if(slotFilter!=='all'&&losers.length)html+=`<h4 class="upgrade-heading">Measured, but no better than your gear</h4>${table(losers.sort((a,b)=>b.rank-a.rank))}`;
       const screened=rows.filter(r=>r.stage===1);
-      if(screened.length)html+=`<details class="log-details"><summary>Screening results not simulated again (${screened.length})</summary>${table(screened.sort((a,b)=>b.rank-a.rank))}</details>`;
+      if(screened.length)html+=`<details class="log-details"${slotFilter==='all'?'':' open'}><summary>Screening results not simulated again (${screened.length})</summary>${table(screened.sort((a,b)=>b.rank-a.rank))}</details>`;
       html+=`<p class="result-note">${stages.filter(st=>st.stem).map(st=>`${st.stage===1?'Screening':'Final round'} (${st.count}): <a href="/reports/${job.id}/${st.stem}.html" download>HTML</a> <a href="/reports/${job.id}/${st.stem}.json" download>JSON</a> <a href="/reports/${job.id}/${st.stem}.simc" download>Input</a>`).join(' · ')}</p></section>`;
     }
-    return html;
+    return `<div id="upgrade-results">${html}</div>`;
   }
   function table(rows){
     const max=Math.max(...rows.map(r=>Math.abs(r.rank)),1e-9);const tanky=rows.some(r=>r.tanky);
     return `<table class="result-table"><thead><tr><th>Item</th><th>Source</th><th>${tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i===0&&r.rank>0&&r.stage===2?'winner':''}"><td>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · item level ${r.c.itemLevel}${r.stage===1?' · screening only':''}</small>${r.rank>0?`<div class="bar"><span style="width:${(r.rank/max*100).toFixed(1)}%"></span></div>`:''}</td><td class="upgrade-source-cell">${r.c.sources.map(src=>`<small>${esc(src.label)}</small>`).join('')}</td><td>${r.tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %${r.uncertain?' · uncertain':''}</small>`:`${r.delta>=0?'+':''}${r.percent.toFixed(2)} %<small>${r.delta>=0?'+':''}${number(r.delta)} DPS${r.uncertain?' · uncertain':''}</small>`}</td></tr>`).join('')}</tbody></table>`;
   }
+  $('#result-content').addEventListener('click',event=>{
+    const chip=event.target.closest('[data-slot-filter]');
+    if(!chip||!lastJob)return;
+    slotFilter=chip.dataset.slotFilter;
+    const container=$('#upgrade-results');
+    if(container)container.outerHTML=results(lastJob);
+  });
+
   return {init,settings,count,results};
 }

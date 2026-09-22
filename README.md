@@ -41,6 +41,8 @@ The season is read from the pinned client data: its bonus-roll group names the r
 
 Candidates are filtered for your class and specialization: allowed classes, loot specialization, armor type, weapon proficiency, shields and primary stat. Each item is placed in every slot it fits. Rings and trinkets are tried in both slots, and a unique-equipped item never goes next to its own copy. Weapons are compared like for like with what you wield: a two-hander replaces a two-hander, and a one-hander replaces a one-hander. Titan's Grip allows both. Your enchant carries over, and existing gems carry over into sockets the new item already has. Vault sockets and embellishments are not added.
 
+Results can be filtered by slot: pick Neck, Rings or Main hand and every item measured for that slot is listed — the upgrades, the ones that were no better, and the ones screening cut — so "why is this item not here?" has an answer on the page. The unfiltered lists are unchanged.
+
 Each scenario runs in two SimC profileset runs. Screening simulates every candidate with at most 2,000 iterations and a 0.5% target error. Candidates whose screened DPS could beat the current gear within the combined uncertainty then go to a final round with your iteration and target-error settings. The final round takes up to 24, 48 or 96 candidates, with a quota per slot. Results show the best upgrade per boss, dungeon or source, every measured upgrade, and screening results that were not simulated again. Screening-only numbers are labelled. A search is limited to 800 candidates. Some crafted pieces require the matching profession to equip, and the data does not say which ones.
 
 ## WoW addon (SimCLab)
