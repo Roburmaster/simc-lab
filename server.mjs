@@ -10,6 +10,7 @@ import {loadCatalog} from './lib/catalog.mjs';
 import {loadSeason,publicSources} from './lib/upgrades.mjs';
 import {presets as tankPresets,isTank} from './lib/tank.mjs';
 import {loadReferenceSpecs,publicSpec,clearReferenceCache,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
+import {tierListPage} from './lib/tierpage.mjs';
 import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from './lib/engine.mjs';
 import * as engine from './lib/engine.mjs';
 import {upstreamDir,currentProfileDir} from './lib/paths.mjs';
@@ -76,7 +77,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/upgrade-sources')return json(res,200,publicSources(season));
     if(req.method==='GET'&&route==='/api/weapon-specs'){
       const specs=await loadReferenceSpecs(engine.source,talentData);
-      return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,kinds:weaponKindNames,limits:weaponLimits,season:season.season});
+      return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,kinds:weaponKindNames,craftedStats:season.craftedStats,limits:weaponLimits,season:season.season});
     }
     if(req.method==='GET'&&route==='/api/example'){
       const dir=await currentProfileDir(engine.source);const file=(await fs.readdir(dir)).find(f=>/_Mage_Frost\.simc$/.test(f));let text=await fs.readFile(path.join(dir,file),'utf8');
@@ -100,7 +101,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(req.method==='POST'&&route==='/api/preview'){
       const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists};
-      const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,level:plan.weapons.level,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
+      const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,craftedStats:plan.weapons.craftedStats.length,level:plan.weapons.level,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
       return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:upgrade?2*plan.scenarios.length:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
@@ -108,6 +109,16 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/jobs')return json(res,200,[...jobs.jobs.values()].reverse().map(j=>({id:j.id,name:j.name,mode:j.mode,status:j.status,created:j.created,done:j.done,total:j.total,fraction:jobFraction(j)})));
     const jobRoute=route.match(/^\/api\/jobs\/([\da-f-]{36})(\/cancel)?$/);
     if(jobRoute){const job=jobs.jobs.get(jobRoute[1]);if(!job)return json(res,404,{error:'Job not found.'});if(req.method==='POST'&&jobRoute[2])return json(res,200,await jobs.cancel(job.id));if(req.method==='GET'&&!jobRoute[2])return json(res,200,{...jobs.public(job),queue:jobs.queueFor(job),fraction:jobFraction(job)});}
+    // The tier list is written here rather than by SimC, and carries no script, so it can be read in place.
+    const tierList=route.match(/^\/tier-list\/([\da-f-]{36})\.html$/);
+    if(req.method==='GET'&&tierList){
+      const job=jobs.jobs.get(tierList[1]);
+      if(!job?.weapons)return json(res,404,{error:'No Weapon Lab job with that id.'});
+      const html=tierListPage(jobs.public(job));
+      const filename=`weapon-tier-list-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
+      return res.end(html);
+    }
     const report=route.match(/^\/reports\/([\da-f-]{36})\/(\d{3}\.(?:html|json|simc)|request\.json)$/);
     if(req.method==='GET'&&report){
       const data=await fs.readFile(path.join(runsDir,report[1],report[2]));

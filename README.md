@@ -86,9 +86,13 @@ The candidates are the weapons in the active season's loot tables — the same p
 
 Every candidate is pinned to one upgrade track and level, so the ranking measures the weapon and not where it dropped. The reference profile's weapon enchant carries over, and existing gems carry over into sockets the new item already has. The reference character's own weapon stays as the profileset baseline and is reported with the results.
 
+Crafted weapons and shields carry no secondary stats of their own. Without a chosen pair they lose several percent of their damage — measured at 2.6 to 3.7% on a crafted two-hander — and rank far below what they are worth, so they are simulated in every stat pair you select (all six by default). The stat pairs of one item compete for a single place in the final round, and the results list each crafted item once, at the pair that served it best.
+
 Each specialization runs on its own. A list no longer than the final round size is simulated once with your iteration and target-error settings; a longer one is screened first at up to 2,000 iterations and a 0.5% target error, and the best 12, 24 or 48 go on to the full round. Screening-only numbers are labelled. Tank specializations are ranked on the same weighted DPS and survival score as the rest of the app, with a boss calibrated once for each of them, so shields can be judged on more than damage. A job is limited to 2,400 candidate runs, counting every scenario.
 
 Tiers measure the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons within the combined 95% uncertainty of the best one are marked as such. Absolute numbers are comparable within a specialization only; reference profiles are built by different authors and are not a class ranking.
+
+**The tier list page.** A finished job offers one page holding every class and specialization it covered, with each weapon in its tier, where it drops, the stat pair a crafted item was ranked at, and a link to Wowhead. Open it in the app or save it and send it on: it carries no script and no external file, so it reads the same from a folder as it does from the app.
 
 ## Tank simulation
 

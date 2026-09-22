@@ -21,6 +21,7 @@ export function weaponUI({api,notice,updateCount}){
         <div class="two-col upgrade-track"><label>Item level<select data-track="weapons">${data.tracks.map(t=>`<option value="${t.id}" ${t.id===track.id?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('')}</select></label><label>Level<select data-level="weapons">${levelOptions(track.id,top.level)}</select></label></div>
         <label>Final round size<select id="weapon-finalists">${data.limits.finalists.map(n=>`<option value="${n}" ${n===24?'selected':''}>${n} candidates per spec</option>`).join('')}</select></label>
         <p class="hint">A specialization with more candidates than this is screened first, and only the best go on to the full simulation. Shorter lists are simulated once at full precision.</p></section>
+      <section class="upgrade-card"><strong>Crafted secondary stats</strong><p class="hint">Crafted weapons and shields carry no secondary stats of their own; without a pair they lose several percent. Every selected pair is simulated, and each crafted item is listed once, at the pair that served it best.</p><div class="upgrade-group-actions"><button class="text-button" data-all="stat">All</button><button class="text-button" data-none="stat">None</button></div><div class="upgrade-groups">${data.craftedStats.map(s=>`<label class="check"><input type="checkbox" data-group="stat" value="${s.bonusId}" checked>${esc(s.name)}</label>`).join('')}</div></section>
     </div>
     <div id="weapon-count" class="hint">Counting candidates …</div>
     <p class="result-note">Tier lists compare weapons, not item levels: every candidate is pinned to the chosen upgrade level, and the enchant and any gems of the reference profile carry over. Tank specializations are ranked on the same weighted DPS and survival score as the rest of the app, with a boss calibrated for each of them.</p>`;
@@ -28,7 +29,7 @@ export function weaponUI({api,notice,updateCount}){
   const checked=name=>$$(`[data-group="${name}"]:checked`).map(e=>e.value);
   function settings(){
     if(!data)return {};
-    return {specs:checked('spec'),kinds:checked('kind'),track:Number($('[data-track="weapons"]').value),level:Number($('[data-level="weapons"]').value),finalists:Number($('#weapon-finalists').value)};
+    return {specs:checked('spec'),kinds:checked('kind'),craftedStats:checked('stat').map(Number),track:Number($('[data-track="weapons"]').value),level:Number($('[data-level="weapons"]').value),finalists:Number($('#weapon-finalists').value)};
   }
   async function init(){
     try{
@@ -54,7 +55,7 @@ export function weaponUI({api,notice,updateCount}){
     countTimer=setTimeout(async()=>{
       try{
         const preview=await api('/api/preview',request());const w=preview.weapons;
-        $('#weapon-count').innerHTML=`<strong>${w.candidates} candidates</strong> across ${w.specs} specialization${w.specs===1?'':'s'} at item level ${w.level.itemLevel} · ${w.steps} SimC runs${w.tanks?` · ${w.tanks} tank boss calibration${w.tanks===1?'':'s'}`:''}${w.skipped.length?`<br><small>Left out: ${esc(w.skipped.map(s=>s.label).join(', '))} — no item in the selected categories fits what the reference profile wields.</small>`:''}`;
+        $('#weapon-count').innerHTML=`<strong>${w.candidates} candidates</strong> across ${w.specs} specialization${w.specs===1?'':'s'} at item level ${w.level.itemLevel}${w.craftedStats>1?` · crafted in ${w.craftedStats} stat pairs`:''} · ${w.steps} SimC runs${w.tanks?` · ${w.tanks} tank boss calibration${w.tanks===1?'':'s'}`:''}${w.skipped.length?`<br><small>Left out: ${esc(w.skipped.map(s=>s.label).join(', '))} — no item in the selected categories fits what the reference profile wields.</small>`:''}`;
       }catch(e){$('#weapon-count').textContent=e.message;}
     },350);
   }
@@ -63,7 +64,7 @@ export function weaponUI({api,notice,updateCount}){
   function table(rows,candidates,tanky){
     return `<table class="result-table weapon-table"><thead><tr><th>#</th><th>Item</th><th>${tanky?'Score':'DPS'}</th><th>Behind best</th><th>Tier</th></tr></thead><tbody>${rows.map(row=>{
       const c=candidates.get(row.key);if(!c)return '';
-      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${row.screened?' · screening only':''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${row.rank===1?'—':`${tanky?`−${row.behind.toFixed(2)}`:`−${row.behind.toFixed(2)} %`}${row.tied?'<small>within uncertainty</small>':''}`}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
+      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${row.screened?' · screening only':''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${row.rank===1?'—':`${tanky?`−${row.behind.toFixed(2)}`:`−${row.behind.toFixed(2)} %`}${row.tied?'<small>within uncertainty</small>':''}`}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
     }).join('')}</tbody></table>`;
   }
   function results(job){
@@ -71,6 +72,7 @@ export function weaponUI({api,notice,updateCount}){
     const specs=job.weapons.specs;
     let html=`<div class="search-summary"><strong>Weapon Lab · ${specs.length} specialization${specs.length===1?'':'s'} · ${esc(job.weapons.level.label)} · item level ${job.weapons.level.itemLevel}</strong><p class="hint">${esc(job.weapons.season?.name||'')} loot tables · categories: ${esc(job.weapons.kinds.map(k=>({main:'Main hand',offhand:'Off-hand weapon',shield:'Shield',held:'Held in off hand'})[k]||k).join(', '))}. Screening uses up to ${number(job.weapons.screen.iterations)} iterations at ${job.weapons.screen.targetError}% target error; the final round uses ${number(job.settings.iterations)} iterations at ${job.settings.targetError}%.</p></div>`;
     if(job.weapons.skipped?.length)html+=`<p class="hint">Left out: ${esc(job.weapons.skipped.map(s=>s.label).join(', '))}.</p>`;
+    if(job.results.some(r=>Number.isFinite(r.rank)))html+=`<p class="tier-page-links"><a class="button small secondary" href="/tier-list/${job.id}.html" target="_blank" rel="noopener">Open the tier list page ↗</a><a class="button small secondary" href="/tier-list/${job.id}.html?download" download>Download it</a><span class="hint">One page with every class and specialization, ready to read or send on. It needs no script and no server of its own.</span></p>`;
     for(const stage of (job.stages||[]).filter(st=>st.status==='failed'&&st.stage===0))html+=`<p class="notice">${esc(specs.find(s=>s.key===stage.spec)?.label||stage.spec)}: tank boss calibration failed — ${esc(stage.error)}</p>`;
     for(let s=0;s<job.scenarios.length;s++){
       const scenario=job.scenarios[s];
@@ -83,7 +85,7 @@ export function weaponUI({api,notice,updateCount}){
       html+=`<section class="result-scenario"><h3>${esc(scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
       html+=`<h4 class="upgrade-heading">Best weapon per specialization</h4><div class="upgrade-source-list">${done.map(({spec,candidates,rows})=>{
         const best=rows[0],c=candidates.get(best.key),runnerUp=rows.find(r=>r.rank===2);
-        return `<div class="upgrade-source"><span><small>${esc(spec.className)}</small><strong>${esc(spec.specName)}</strong></span><span>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data?.kinds?.[c.kind]||c.kind)} · ${esc(c.sources[0]||'')}</small></span><b>${runnerUp?`+${runnerUp.behind.toFixed(2)}${runnerUp.tied?'?':''}`:'—'}</b></div>`;
+        return `<div class="upgrade-source"><span><small>${esc(spec.className)}</small><strong>${esc(spec.specName)}</strong></span><span>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data?.kinds?.[c.kind]||c.kind)} · ${esc(c.sources[0]||'')}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}</small></span><b>${runnerUp?`+${runnerUp.behind.toFixed(2)}${runnerUp.tied?'?':''}`:'—'}</b></div>`;
       }).join('')}</div><p class="hint">The number is how far the second-best weapon falls behind; “?” means that gap is inside the statistical uncertainty.</p>`;
       for(const {spec,candidates,rows,tanky} of done){
         const stages=(job.stages||[]).filter(st=>st.spec===spec.key&&st.scenario===s);
