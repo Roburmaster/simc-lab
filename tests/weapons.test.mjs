@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {weaponCandidates,prepareWeapons,selectTop,rankWeaponRows,loadReferenceSpecs,clearReferenceCache,weaponSteps,actorGear,dropLevels} from '../lib/weapons.mjs';
+import {weaponCandidates,prepareWeapons,selectTop,rankWeaponRows,loadReferenceSpecs,clearReferenceCache,weaponSteps,actorGear,dropLevels,craftedItemLevel} from '../lib/weapons.mjs';
 
 const weaponSpecs=[{itemClass:2,itemSubClass:1,specsCanUse:[71,72,73]},{itemClass:2,itemSubClass:7,specsCanUse:[72,73]},{itemClass:2,itemSubClass:15,specsCanUse:[73]}];
 const items=new Map([[10,{inventoryType:17,itemClass:2}],[11,{inventoryType:13,itemClass:2}],[12,{inventoryType:14,itemClass:4}]]);
@@ -51,8 +51,11 @@ test('a weapon is ranked at the level its own source can give it, and a delve we
   assert.equal(level('Bulwark').itemLevel,344,'a late raid boss drops above its track');
   assert.equal(weaponCandidates(arms,season,catalog,all).find(c=>c.name==='Great axe').itemLevel,333,'an early boss reaches the top of the Myth track');
   const crafted=weaponCandidates(arms,season,catalog,all).find(c=>c.craftedStat);
-  assert.equal(crafted.itemLevel,320,'crafted sits at its own level');
+  assert.equal(crafted.itemLevel,320,'without a known cap, crafted falls back to the Hero track');
   assert.match(crafted.line,/ilevel=320/);
+  // The cap SimulationCraft's own profiles craft to wins over that fallback, and a choice of yours over both.
+  assert.equal(weaponCandidates(arms,season,catalog,{...all,drops:drops({craftedCap:331})}).find(c=>c.craftedStat).itemLevel,331);
+  assert.equal(weaponCandidates(arms,season,catalog,{...all,drops:drops({craftedCap:331,sources:{crafted:{itemLevel:300}}})}).find(c=>c.craftedStat).itemLevel,300);
   // Equal footing is the deliberate exception: one level for everything, whatever the source could give.
   const equal=weaponCandidates(arms,season,catalog,{...all,drops:drops({equal:true,track:myth.id,level:3})});
   assert.deepEqual([...new Set(equal.map(c=>c.itemLevel))],[333]);
@@ -149,6 +152,20 @@ test('a crafted weapon is ranked once, at the stat pair that served it best',()=
   assert.equal(rows[0].variant,true);
   assert.equal(rows[1].variant,false);
   assert.equal(rows[0].rank,undefined,'a variant carries no rank of its own');
+});
+
+test('the crafted cap is read from the season’s own profiles, not guessed',async()=>{
+  const dir=await engineFolder({
+    // Last season crafted lower; only the newest season counts.
+    'MID1/MID1_Warrior_Arms.simc':profileText('warrior="MID1_Warrior_Arms"','arms','wrist=old,id=99,ilevel=285,crafted_stats=32/36\n'),
+    'MID2/MID2_Warrior_Arms.simc':profileText('warrior="MID2_Warrior_Arms"','arms','wrist=bracers,id=98,ilevel=331,crafted_stats=32/36\nfeet=boots,id=97,ilevel=320,crafted_stats=32/40\n')
+  });
+  clearReferenceCache();
+  assert.equal(await craftedItemLevel(dir),331,'the highest crafted piece in the newest season folder');
+  const bare=await engineFolder({'MID2/MID2_Warrior_Arms.simc':profileText('warrior="MID2_Warrior_Arms"','arms')});
+  clearReferenceCache();
+  assert.equal(await craftedItemLevel(bare),null,'no crafted gear in the profiles, no cap to read');
+  await fs.rm(dir,{recursive:true,force:true});await fs.rm(bare,{recursive:true,force:true});
 });
 
 test('the reference character’s own item level is read from the report',()=>{

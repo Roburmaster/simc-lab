@@ -9,7 +9,7 @@ import {parseProfile} from './lib/profile.mjs';
 import {loadCatalog} from './lib/catalog.mjs';
 import {loadSeason,publicSources} from './lib/upgrades.mjs';
 import {presets as tankPresets,isTank} from './lib/tank.mjs';
-import {loadReferenceSpecs,publicSpec,clearReferenceCache,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
+import {loadReferenceSpecs,publicSpec,clearReferenceCache,craftedItemLevel,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
 import {tierListPage} from './lib/tierpage.mjs';
 import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from './lib/engine.mjs';
 import * as engine from './lib/engine.mjs';
@@ -77,7 +77,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/upgrade-sources')return json(res,200,publicSources(season));
     if(req.method==='GET'&&route==='/api/weapon-specs'){
       const specs=await loadReferenceSpecs(engine.source,talentData);
-      return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,difficulties:season.difficulties,kinds:weaponKindNames,craftedStats:season.craftedStats,limits:weaponLimits,season:season.season});
+      return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,difficulties:season.difficulties,kinds:weaponKindNames,craftedStats:season.craftedStats,craftedCap:await craftedItemLevel(engine.source),limits:weaponLimits,season:season.season});
     }
     if(req.method==='GET'&&route==='/api/example'){
       const dir=await currentProfileDir(engine.source);const file=(await fs.readdir(dir)).find(f=>/_Mage_Frost\.simc$/.test(f));let text=await fs.readFile(path.join(dir,file),'utf8');
