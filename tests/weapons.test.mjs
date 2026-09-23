@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {weaponCandidates,prepareWeapons,selectTop,rankWeaponRows,loadReferenceSpecs,clearReferenceCache,weaponSteps} from '../lib/weapons.mjs';
+import {weaponCandidates,prepareWeapons,selectTop,rankWeaponRows,loadReferenceSpecs,clearReferenceCache,weaponSteps,actorGear} from '../lib/weapons.mjs';
 
 const weaponSpecs=[{itemClass:2,itemSubClass:1,specsCanUse:[71,72,73]},{itemClass:2,itemSubClass:7,specsCanUse:[72,73]},{itemClass:2,itemSubClass:15,specsCanUse:[73]}];
 const items=new Map([[10,{inventoryType:17,itemClass:2}],[11,{inventoryType:13,itemClass:2}],[12,{inventoryType:14,itemClass:4}]]);
@@ -69,6 +69,24 @@ test('the final round takes the best of the screening run, not only what beats t
   assert.deepEqual(selectTop(list,tank,1,{boss:{}}).map(c=>c.key),[list[0].key],'tanks rank on the weighted score');
 });
 
+test('both hands get a share of the final round, even when one of them screens higher throughout',()=>{
+  // A profile whose off hand is the weaker piece: every off-hand swap screens above every main-hand swap.
+  const candidates=[
+    ...Array.from({length:8},(_,i)=>({key:`m${i}`,slot:'main_hand',itemId:100+i,name:`Main ${i}`})),
+    ...Array.from({length:8},(_,i)=>({key:`o${i}`,slot:'off_hand',itemId:200+i,name:`Off ${i}`}))
+  ];
+  const screen={baseline:{dps:1000},rows:candidates.map(c=>({key:c.key,dps:c.slot==='off_hand'?2000+Number(c.key.slice(1)):1000+Number(c.key.slice(1))}))};
+  const chosen=selectTop(candidates,screen,6,null);
+  assert.equal(chosen.length,6);
+  assert.equal(chosen.filter(c=>c.slot==='main_hand').length,3);
+  assert.equal(chosen.filter(c=>c.slot==='off_hand').length,3);
+  // A hand with fewer candidates than its share leaves the rest to the other hand.
+  const lopsided=[candidates[0],...candidates.slice(8)];
+  const few=selectTop(lopsided,screen,6,null);
+  assert.equal(few.length,6);
+  assert.equal(few.filter(c=>c.slot==='main_hand').length,1);
+});
+
 test('the stat pairs of one crafted weapon compete for a single place in the final round',()=>{
   const list=weaponCandidates(arms,season,catalog,all);
   const forged=list.filter(c=>c.name==='Forged axe');
@@ -113,6 +131,13 @@ test('a crafted weapon is ranked once, at the stat pair that served it best',()=
   assert.equal(rows[0].rank,undefined,'a variant carries no rank of its own');
 });
 
+test('the reference character’s own item level is read from the report',()=>{
+  const report={sim:{players:[{gear:{head:{ilevel:334},chest:{ilevel:344},tabard:{},main_hand:{ilevel:344}}}]}};
+  assert.deepEqual(actorGear(report),{pieces:3,itemLevel:340.7,min:334,max:344});
+  assert.equal(actorGear({sim:{players:[{gear:{}}]}}),null);
+  assert.equal(actorGear({}),null);
+});
+
 // The reference profiles are SimC's own; only the engine folder layout is faked here.
 async function engineFolder(files){
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'simclab-weapons-'));
@@ -139,6 +164,8 @@ test('one reference profile per spec: the newest season, and the base build over
   clearReferenceCache();
   const specs=await loadReferenceSpecs(dir,talentData);
   assert.deepEqual(specs.map(s=>[s.key,s.season,s.file]),[['warrior-arms','MID2','MID2_Warrior_Arms.simc'],['warrior-protection','MID1','MID1_Warrior_Protection.simc']],'no holy priest: it has no talent tree here');
+  // Protection has no profile for the newest season, so it is carrying an older character and says so.
+  assert.deepEqual(specs.map(s=>s.stale),[false,true]);
   assert.ok(specs[1].tank,'protection is a tank');
   assert.equal(specs[0].text.includes('actions'),false,'the stored action list is dropped for SimC’s own default');
   assert.equal(specs[0].info.name,'MID2_Warrior_Arms');

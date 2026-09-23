@@ -45,6 +45,7 @@
 .tier-B{background:#1d2b3d;border-color:#3d5e85;color:#a8c8ef}
 .tier-C{background:#242a36;border-color:#3d475a;color:#b6c0d0}
 .tier-D{background:#2c2429;border-color:#5b4450;color:#c3aab4}
+.weapon-specs .check.stale small{color:var(--amber)}
 .tier-page-links{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0}
 .tier-page-links .hint{margin:0;flex:1;min-width:220px}
 

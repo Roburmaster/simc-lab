@@ -31,7 +31,7 @@ const job={
   ]
 };
 
-test('the page carries every class, spec and tier, and no script of its own',()=>{
+test('the page carries every class, spec and tier, and no script but Wowhead’s',()=>{
   const html=tierListPage(job);
   assert.match(html,/<h1>Weapon tier list/);
   assert.match(html,/Midnight Season 2/);
@@ -39,8 +39,10 @@ test('the page carries every class, spec and tier, and no script of its own',()=
   assert.match(html,/>Warrior</,'the class heading');
   assert.match(html,/>Arms<|Arms<\/h3>|>Arms/,'the specialization heading');
   assert.match(html,/Protection/);
-  assert.equal(/<script/i.test(html),false,'no script tag anywhere, including from item names');
+  // Wowhead's tooltip script is the only one, and nothing in the data can add another.
+  assert.deepEqual(html.match(/<script[^>]*>/gi),['<script async src="https://wow.zamimg.com/js/tooltips.js">']);
   assert.match(html,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/,'an item name is escaped, not executed');
+  assert.match(html,/data-wowhead="item=30&amp;bonus=12854:13335"/,'links carry the simulated item for the tooltip');
   for(const tier of ['tier-S','tier-A','tier-D'])assert.ok(html.includes(tier),tier);
   assert.match(html,/wowhead\.com\/item=30\?bonus=12854:13335/,'items link to Wowhead with the simulated bonus IDs');
   assert.match(html,/Critical Strike \/ Haste/,'a crafted weapon shows the pair it was ranked at');
@@ -53,6 +55,23 @@ test('rows that were replaced or lost to a better stat pair stay off the page',(
   const html=tierListPage(job);
   assert.equal((html.match(/Great axe/g)||[]).length,1,'the screening row of the same weapon is not listed again');
   assert.equal(html.includes('w004'),false);
+});
+
+test('each hand gets its own list, so a main hand is never ranked against an off hand',()=>{
+  const dual={...job,weapons:{...job.weapons,specs:[{...job.weapons.specs[0],
+    candidates:[
+      {key:'m1',itemId:30,name:'Main axe',slot:'main_hand',kind:'main',itemLevel:334,value:',id=30',sources:['Raid · Boss']},
+      {key:'o1',itemId:31,name:'Off axe',slot:'off_hand',kind:'offhand',itemLevel:334,value:',id=31',sources:['Raid · Boss']}
+    ]}]},
+    results:[
+      {spec:'warrior-arms',scenario:0,stage:2,key:'m1',status:'complete',dps:300000,error95:500,rank:1,behind:0,tier:'S',tied:false},
+      {spec:'warrior-arms',scenario:0,stage:2,key:'o1',status:'complete',dps:290000,error95:500,rank:1,behind:0,tier:'S',tied:false}
+    ]};
+  const html=tierListPage(dual);
+  assert.match(html,/Main hand <span>1 weapons/);
+  assert.match(html,/Off hand <span>1 weapons/);
+  // Both are first in their own hand, so both say "best" rather than one of them trailing the other.
+  assert.equal((html.match(/>best</g)||[]).length,2);
 });
 
 test('a job without a Weapon Lab plan is refused',()=>{

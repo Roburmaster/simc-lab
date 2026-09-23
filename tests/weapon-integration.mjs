@@ -32,11 +32,21 @@ for(const spec of result.weapons.specs){
   assert.ok(crafted.length>=2,`${spec.key}: crafted weapons are in the pool`);
   assert.ok(rows.some(r=>byKey.get(r.key)?.craftedStat),`${spec.key}: a crafted weapon reached the ranking`);
   assert.ok(result.results.some(r=>r.spec===spec.key&&r.variant),`${spec.key}: the weaker stat pairs are marked as variants`);
-  assert.equal(rows[0].behind,0);
   assert.ok(rows.every(r=>'SABCD'.includes(r.tier)),`${spec.key}: every row has a tier`);
-  assert.ok(rows.every((r,i)=>r.rank===i+1),`${spec.key}: ranks are a sequence`);
   assert.ok(rows.every(r=>spec.candidates.some(c=>c.key===r.key)),`${spec.key}: every row belongs to a candidate`);
   assert.ok(rows.some(r=>!r.screened),`${spec.key}: the final round replaced its screening rows`);
+  assert.ok(spec.gear?.itemLevel>0,`${spec.key}: the reference character's item level was read`);
+  // Each hand is its own list: it starts at rank 1 with nothing behind it, and runs without a gap.
+  const hands=[...new Set(spec.candidates.map(c=>c.slot))];
+  for(const slot of hands){
+    const hand=rows.filter(r=>byKey.get(r.key)?.slot===slot);
+    assert.ok(hand.length,`${spec.key}: ${slot} has a list`);
+    assert.equal(hand[0].rank,1,`${spec.key}: ${slot} starts at rank 1`);
+    assert.equal(hand[0].behind,0,`${spec.key}: ${slot} is measured from its own best`);
+    assert.ok(hand.every((r,i)=>r.rank===i+1),`${spec.key}: ${slot} ranks are a sequence`);
+    // Both hands reach the full round; neither is left with screening numbers alone.
+    assert.ok(hand.some(r=>!r.screened),`${spec.key}: ${slot} had candidates in the final round`);
+  }
   if(spec.tank){
     assert.ok(rows.every(r=>Number.isFinite(r.score)),'a tank spec ranks on the weighted score');
     assert.ok(spec.boss?.measured?.deaths>=0,'the boss was calibrated for this spec');
@@ -48,7 +58,8 @@ assert.ok(stages.some(s=>s.stage===1)&&stages.some(s=>s.stage===2),'both screeni
 const page=await fetch(`${base}/tier-list/${job.id}.html`);
 assert.equal(page.headers.get('content-type'),'text/html; charset=utf-8');
 const html=await page.text();
-assert.equal(/<script/i.test(html),false,'the page carries no script');
+assert.deepEqual(html.match(/<script[^>]*>/gi),['<script async src="https://wow.zamimg.com/js/tooltips.js">'],'only Wowhead’s tooltip script');
+assert.match(html,/Main hand <span>/,'the page lists each hand on its own');
 for(const spec of result.weapons.specs){
   assert.ok(html.includes(spec.specName),`the page lists ${spec.label}`);
   const best=result.results.filter(r=>r.spec===spec.key&&r.rank===1)[0];
