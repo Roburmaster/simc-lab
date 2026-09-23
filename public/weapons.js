@@ -12,15 +12,21 @@ export function weaponUI({api,notice,updateCount}){
   const levelOptions=(trackId,selected)=>(data.tracks.find(t=>t.id===Number(trackId))||data.tracks.at(-1)).levels.map(l=>`<option value="${l.level}" ${l.level===selected?'selected':''}>${l.level}/${l.max} · item level ${l.itemLevel}</option>`).join('');
   function render(){
     const track=data.tracks.at(-1),top=track.levels.at(-1);
+    const hero=data.tracks.find(t=>t.name==='Hero')||data.tracks.at(-2)||track;
     $('#weapon-season').textContent=data.season.name;
     const byClass=new Map();
     for(const spec of data.specs){if(!byClass.has(spec.className))byClass.set(spec.className,[]);byClass.get(spec.className).push(spec);}
     $('#weapon-options').innerHTML=`<div class="weapon-grid">
       <section class="upgrade-card"><strong>Specializations</strong><p class="hint">${data.specs.length} specializations have a reference profile — SimulationCraft's own character for the season, gear, gems and enchants included. Healing specializations have none, so they cannot be ranked.${data.specs.some(s=>s.stale)?` <b>${data.specs.filter(s=>s.stale).map(s=>esc(s.label)).join(', ')}</b> still carry the previous season's gear, tens of item levels below the rest: their own ranking holds, but it is made on a weaker character.`:''}</p><div class="upgrade-group-actions"><button class="text-button" data-all="spec">All</button><button class="text-button" data-none="spec">None</button><button class="text-button" data-only="tank">Tanks only</button></div><div class="weapon-specs">${[...byClass].map(([className,specs])=>`<div class="weapon-class"><h4>${esc(className)}</h4>${specs.map(s=>`<label class="check${s.stale?' stale':''}" ${s.stale?`title="SimulationCraft has not rebuilt this profile for the current season, so its character wears the previous season's gear."`:''}><input type="checkbox" data-group="spec" value="${esc(s.key)}" data-tank="${s.tank?'1':'0'}" checked>${esc(s.specName)}<small>${esc(s.season)}${s.stale?' · old gear':''}${s.tank?' · tank':''}</small></label>`).join('')}</div>`).join('')}</div></section>
       <section class="upgrade-card"><strong>Weapon categories</strong><p class="hint">A candidate is only tried where the reference profile already wields the same kind: a two-hander replaces a two-hander, a shield replaces a shield.</p><div class="upgrade-groups">${Object.entries(data.kinds).map(([key,label])=>`<label class="check"><input type="checkbox" data-group="kind" value="${key}" checked>${esc(label)}</label>`).join('')}</div>
-        <div class="two-col upgrade-track"><label>Item level<select data-track="weapons">${data.tracks.map(t=>`<option value="${t.id}" ${t.id===track.id?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('')}</select></label><label>Level<select data-level="weapons">${levelOptions(track.id,top.level)}</select></label></div>
         <label>Final round size<select id="weapon-finalists">${data.limits.finalists.map(n=>`<option value="${n}" ${n===24?'selected':''}>${n} candidates per spec</option>`).join('')}</select></label>
         <p class="hint">A specialization with more candidates than this is screened first, and only the best go on to the full simulation. Shorter lists are simulated once at full precision.</p></section>
+      <section class="upgrade-card"><strong>Item level per source</strong><p class="hint">A weapon is ranked at the level its own source can actually give it. Delve and dungeon loot stops at the top of its track; only the raid reaches the Myth track, and its last bosses drop above it.</p>
+        <div class="two-col upgrade-track"><label>Raid difficulty<select data-source-track="raid">${data.difficulties.map(d=>`<option value="${d.track}" ${d.track===data.difficulties.at(-1).track?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label><label>Crafted item level<input id="weapon-crafted-ilevel" type="number" min="1" max="1000" value="${hero.levels.at(-1).itemLevel}"></label></div>
+        ${['mplus','delves'].map(kind=>`<div class="two-col upgrade-track"><label>${kind==='mplus'?'Mythic+':'Delves'} track<select data-source-track="${kind}">${data.tracks.map(t=>`<option value="${t.id}" ${t.id===hero.id?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('')}</select></label><label>Level<select data-source-level="${kind}">${levelOptions(hero.id,hero.levels.at(-1).level)}</select></label></div>`).join('')}
+        <label class="check"><input type="checkbox" id="weapon-equal">Compare at one item level instead</label>
+        <div class="two-col upgrade-track" id="weapon-equal-level" hidden><label>Track<select data-track="weapons">${data.tracks.map(t=>`<option value="${t.id}" ${t.id===track.id?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('')}</select></label><label>Level<select data-level="weapons">${levelOptions(track.id,top.level)}</select></label></div>
+        <p class="hint">Equal footing answers what a weapon is worth rather than what you can reach with it, so it will show weapons at levels their source cannot give.</p></section>
       <section class="upgrade-card"><strong>Crafted secondary stats</strong><p class="hint">Crafted weapons and shields carry no secondary stats of their own; without a pair they lose several percent. Every selected pair is simulated, and each crafted item is listed once, at the pair that served it best.</p><div class="upgrade-group-actions"><button class="text-button" data-all="stat">All</button><button class="text-button" data-none="stat">None</button></div><div class="upgrade-groups">${data.craftedStats.map(s=>`<label class="check"><input type="checkbox" data-group="stat" value="${s.bonusId}" checked>${esc(s.name)}</label>`).join('')}</div></section>
     </div>
     <div id="weapon-count" class="hint">Counting candidates …</div>
@@ -29,15 +35,25 @@ export function weaponUI({api,notice,updateCount}){
   const checked=name=>$$(`[data-group="${name}"]:checked`).map(e=>e.value);
   function settings(){
     if(!data)return {};
-    return {specs:checked('spec'),kinds:checked('kind'),craftedStats:checked('stat').map(Number),track:Number($('[data-track="weapons"]').value),level:Number($('[data-level="weapons"]').value),finalists:Number($('#weapon-finalists').value)};
+    const equal=$('#weapon-equal').checked;
+    return {specs:checked('spec'),kinds:checked('kind'),craftedStats:checked('stat').map(Number),finalists:Number($('#weapon-finalists').value),
+      equal,track:Number($('[data-track="weapons"]').value),level:Number($('[data-level="weapons"]').value),
+      sources:{raid:{track:Number($('[data-source-track="raid"]').value)},
+        mplus:{track:Number($('[data-source-track="mplus"]').value),level:Number($('[data-source-level="mplus"]').value)},
+        delves:{track:Number($('[data-source-track="delves"]').value),level:Number($('[data-source-level="delves"]').value)},
+        crafted:{itemLevel:Number($('#weapon-crafted-ilevel').value)}}};
   }
   async function init(){
     try{
       data=await api('/api/weapon-specs');render();
       $('#weapon-options').addEventListener('change',event=>{
         if(event.target.dataset.track){const level=$('[data-level="weapons"]');level.innerHTML=levelOptions(event.target.value,Number(level.value));}
+        const kind=event.target.dataset.sourceTrack;
+        if(kind&&kind!=='raid'){const level=$(`[data-source-level="${kind}"]`);level.innerHTML=levelOptions(event.target.value,Number(level.value));}
+        if(event.target.id==='weapon-equal')$('#weapon-equal-level').hidden=!event.target.checked;
         updateCount();
       });
+      $('#weapon-options').addEventListener('input',event=>{if(event.target.id==='weapon-crafted-ilevel')updateCount();});
       $('#weapon-options').addEventListener('click',event=>{
         const {all,none,only}=event.target.dataset;
         if(!all&&!none&&!only)return;
@@ -55,7 +71,7 @@ export function weaponUI({api,notice,updateCount}){
     countTimer=setTimeout(async()=>{
       try{
         const preview=await api('/api/preview',request());const w=preview.weapons;
-        $('#weapon-count').innerHTML=`<strong>${w.candidates} candidates</strong> across ${w.specs} specialization${w.specs===1?'':'s'} at item level ${w.level.itemLevel}${w.craftedStats>1?` · crafted in ${w.craftedStats} stat pairs`:''} · ${w.steps} SimC runs${w.tanks?` · ${w.tanks} tank boss calibration${w.tanks===1?'':'s'}`:''}${w.skipped.length?`<br><small>Left out: ${esc(w.skipped.map(s=>s.label).join(', '))} — no item in the selected categories fits what the reference profile wields.</small>`:''}`;
+        $('#weapon-count').innerHTML=`<strong>${w.candidates} candidates</strong> across ${w.specs} specialization${w.specs===1?'':'s'} at item level ${w.levels.min===w.levels.max?w.levels.max:`${w.levels.min}–${w.levels.max}`}${w.craftedStats>1?` · crafted in ${w.craftedStats} stat pairs`:''} · ${w.steps} SimC runs${w.tanks?` · ${w.tanks} tank boss calibration${w.tanks===1?'':'s'}`:''}${w.skipped.length?`<br><small>Left out: ${esc(w.skipped.map(s=>s.label).join(', '))} — no item in the selected categories fits what the reference profile wields.</small>`:''}`;
       }catch(e){$('#weapon-count').textContent=e.message;}
     },350);
   }
@@ -64,13 +80,15 @@ export function weaponUI({api,notice,updateCount}){
   function table(rows,candidates,tanky){
     return `<table class="result-table weapon-table"><thead><tr><th>#</th><th>Item</th><th>${tanky?'Score':'DPS'}</th><th>Behind best</th><th>Tier</th></tr></thead><tbody>${rows.map(row=>{
       const c=candidates.get(row.key);if(!c)return '';
-      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${row.screened?' · screening only':''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${row.rank===1?'—':`${tanky?`−${row.behind.toFixed(2)}`:`−${row.behind.toFixed(2)} %`}${row.tied?'<small>within uncertainty</small>':''}`}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
+      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${c.itemLevel?` · item level ${c.itemLevel}${c.levelLabel?` (${esc(c.levelLabel)})`:''}`:''}${row.screened?' · screening only':''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${row.rank===1?'—':`${tanky?`−${row.behind.toFixed(2)}`:`−${row.behind.toFixed(2)} %`}${row.tied?'<small>within uncertainty</small>':''}`}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
     }).join('')}</tbody></table>`;
   }
   function results(job){
     if(!job.weapons)return '';
     const specs=job.weapons.specs;
-    let html=`<div class="search-summary"><strong>Weapon Lab · ${specs.length} specialization${specs.length===1?'':'s'} · ${esc(job.weapons.level.label)} · item level ${job.weapons.level.itemLevel}</strong><p class="hint">${esc(job.weapons.season?.name||'')} loot tables · categories: ${esc(job.weapons.kinds.map(k=>({main:'Main hand',offhand:'Off-hand weapon',shield:'Shield',held:'Held in off hand'})[k]||k).join(', '))}. Screening uses up to ${number(job.weapons.screen.iterations)} iterations at ${job.weapons.screen.targetError}% target error; the final round uses ${number(job.settings.iterations)} iterations at ${job.settings.targetError}%.</p></div>`;
+    const levels=job.weapons.levels||{},src=job.weapons.sources||{};
+    const levelText=levels.min===levels.max?`item level ${levels.max}`:`item level ${levels.min}–${levels.max}`;
+    let html=`<div class="search-summary"><strong>Weapon Lab · ${specs.length} specialization${specs.length===1?'':'s'} · ${esc(levelText)}</strong><p class="hint">${src.equal?`Equal footing: every weapon pinned to ${esc(src.label||'')}, including ones their source cannot give at that level.`:`Each weapon at the level its source can give: ${esc([src.raid&&`raid ${src.raid.label}`,src.mplus&&`Mythic+ ${src.mplus.label}`,src.delves&&`delves ${src.delves.label}`,src.crafted&&`crafted ${src.crafted.label}`].filter(Boolean).join(' · '))}.`}<br>${esc(job.weapons.season?.name||'')} loot tables · categories: ${esc(job.weapons.kinds.map(k=>({main:'Main hand',offhand:'Off-hand weapon',shield:'Shield',held:'Held in off hand'})[k]||k).join(', '))}. Screening uses up to ${number(job.weapons.screen.iterations)} iterations at ${job.weapons.screen.targetError}% target error; the final round uses ${number(job.settings.iterations)} iterations at ${job.settings.targetError}%.</p></div>`;
     if(job.weapons.skipped?.length)html+=`<p class="hint">Left out: ${esc(job.weapons.skipped.map(s=>s.label).join(', '))}.</p>`;
     if(job.results.some(r=>Number.isFinite(r.rank)))html+=`<p class="tier-page-links"><a class="button small secondary" href="/tier-list/${job.id}.html" target="_blank" rel="noopener">Open the tier list page ↗</a><a class="button small secondary" href="/tier-list/${job.id}.html?download" download>Download it</a><span class="hint">One page with every class and specialization, ready to read or send on. It needs no server of its own; the only thing it fetches is Wowhead's tooltip script.</span></p>`;
     for(const stage of (job.stages||[]).filter(st=>st.status==='failed'&&st.stage===0))html+=`<p class="notice">${esc(specs.find(s=>s.key===stage.spec)?.label||stage.spec)}: tank boss calibration failed — ${esc(stage.error)}</p>`;
@@ -94,7 +112,7 @@ export function weaponUI({api,notice,updateCount}){
         html+=`<details class="log-details weapon-spec" open><summary>${esc(spec.label)} <span class="pill">${rows.length} weapons</span></summary>`;
         const base=stages.find(st=>st.stage===2&&st.baseline)?.baseline||stages.find(st=>st.baseline)?.baseline;
         if(base)html+=`<p class="hint">Reference profile ${esc(spec.file.replace(/\.simc$/,''))} with its own weapon: ${number(base.dps)} DPS${spec.gear?` · gear at item level ${spec.gear.itemLevel} on average (${spec.gear.min}–${spec.gear.max})`:''}.</p>`;
-        if(spec.stale)html+=`<p class="notice">${esc(spec.season)} profile: SimulationCraft has not rebuilt this specialization for the current season, so it is ranking ${job.weapons.level.itemLevel}-level weapons on last season's character. The order within this list holds; do not read it next to the others.</p>`;
+        if(spec.stale)html+=`<p class="notice">${esc(spec.season)} profile: SimulationCraft has not rebuilt this specialization for the current season, so it is ranking current weapons on last season's character. The order within this list holds; do not read it next to the others.</p>`;
         if(spec.boss?.measured)html+=`<p class="hint">Tank boss calibrated to ${number(spec.boss.health)} health: ${spec.boss.measured.sustained.toFixed(1)}% health per second, tank-busters of ${spec.boss.measured.buster.toFixed(0)}%, and the reference gear died in ${spec.boss.measured.deaths.toFixed(0)}% of calibration fights.${spec.boss.measured.reached?'':' The death target was not reached, so survival differences may be muted.'}</p>`;
         for(const st of stages)if(st.status==='failed')html+=`<p class="notice">${st.stage===1?'Screening':'Final round'} failed: ${esc(st.error)}</p>`;
         html+=hands.map(hand=>`${hands.length>1?`<h4 class="upgrade-heading">${esc(hand.name)} · ${hand.rows.length} weapons</h4>`:''}${table(hand.rows,candidates,tanky)}`).join('');

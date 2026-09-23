@@ -18,6 +18,12 @@ assert.ok(preview.weapons.candidates>20,JSON.stringify(preview.weapons));
 assert.equal(preview.weapons.specs,2);assert.equal(preview.weapons.tanks,1);
 assert.equal(preview.weapons.craftedStats,data.craftedStats.length);
 assert.equal(preview.total,preview.weapons.steps);
+// Each source keeps to the level it can actually give: only the raid reaches the top track.
+const src=preview.weapons.sources;
+assert.equal(src.equal,false);
+assert.ok(src.delves.itemLevel<src.raid.itemLevel,`delves ${src.delves.itemLevel} must stay below raid ${src.raid.itemLevel}`);
+assert.ok(src.mplus.itemLevel<src.raid.itemLevel);
+assert.equal(preview.weapons.levels.max,src.raid.itemLevel);
 const job=await post('/api/jobs',request);
 let result;for(let i=0;i<1800;i++){result=await(await fetch(base+'/api/jobs/'+job.id)).json();if(!['queued','running'].includes(result.status))break;await new Promise(r=>setTimeout(r,1000));}
 assert.equal(result.status,'complete',JSON.stringify(result.stages)+result.log);
@@ -71,5 +77,7 @@ assert.match(html,/wowhead\.com\/item=\d+\?bonus=/);
 assert.equal((await fetch(`${base}/tier-list/00000000-0000-0000-0000-000000000000.html`)).status,404);
 const input=await(await fetch(`${base}/reports/${job.id}/${stages[0].stem}.simc`)).text();
 assert.match(input,/profileset\."w001"=(main_hand|off_hand)=,id=\d+,bonus_id=/);
-assert.ok(!/^main_hand=.*\n.*profileset."w001"=main_hand=.*ilevel=/m.test(input),'candidates carry their item level through bonus IDs');
-console.log(`PASS: ${preview.weapons.candidates} candidates in ${preview.weapons.craftedStats} crafted stat pairs ranked for ${preview.weapons.specs} specializations at item level ${preview.weapons.level.itemLevel}, ${stages.length} profileset runs, tier list page ${html.length} bytes.`);
+// A delve weapon is never simulated above the level its own track can reach.
+for(const spec of result.weapons.specs)for(const c of spec.candidates.filter(c=>c.sources.some(s=>s.startsWith('Delves'))))
+  assert.ok(c.itemLevel<=src.delves.itemLevel,`${c.name} from delves at ${c.itemLevel}, cap ${src.delves.itemLevel}`);
+console.log(`PASS: ${preview.weapons.candidates} candidates in ${preview.weapons.craftedStats} crafted stat pairs ranked for ${preview.weapons.specs} specializations at item level ${preview.weapons.levels.min}-${preview.weapons.levels.max}, ${stages.length} profileset runs, tier list page ${html.length} bytes.`);

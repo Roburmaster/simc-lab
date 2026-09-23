@@ -77,7 +77,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/upgrade-sources')return json(res,200,publicSources(season));
     if(req.method==='GET'&&route==='/api/weapon-specs'){
       const specs=await loadReferenceSpecs(engine.source,talentData);
-      return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,kinds:weaponKindNames,craftedStats:season.craftedStats,limits:weaponLimits,season:season.season});
+      return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,difficulties:season.difficulties,kinds:weaponKindNames,craftedStats:season.craftedStats,limits:weaponLimits,season:season.season});
     }
     if(req.method==='GET'&&route==='/api/example'){
       const dir=await currentProfileDir(engine.source);const file=(await fs.readdir(dir)).find(f=>/_Mage_Frost\.simc$/.test(f));let text=await fs.readFile(path.join(dir,file),'utf8');
@@ -101,7 +101,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(req.method==='POST'&&route==='/api/preview'){
       const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists};
-      const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,craftedStats:plan.weapons.craftedStats.length,level:plan.weapons.level,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
+      const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,craftedStats:plan.weapons.craftedStats.length,sources:plan.weapons.sources,levels:plan.weapons.levels,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
       return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:upgrade?2*plan.scenarios.length:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}

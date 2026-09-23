@@ -10,7 +10,8 @@ const job={
   settings:{iterations:10000,targetError:0.1,duration:300},
   scenarios:[{style:'Patchwerk',targets:1}],
   weapons:{
-    season:{id:2,name:'Midnight Season 2'},level:{track:618,level:6,itemLevel:334,label:'Myth 6/6'},
+    season:{id:2,name:'Midnight Season 2'},levels:{min:321,max:344},
+    sources:{equal:false,raid:{track:618,name:'Mythic',label:'Mythic · up to Myth 6/6 (last bosses 344)',itemLevel:344},mplus:{track:617,level:6,label:'Hero 6/6',itemLevel:321},delves:{track:617,level:6,label:'Hero 6/6',itemLevel:321},crafted:{itemLevel:321,label:'item level 321'}},
     screen:{iterations:2000,targetError:0.5},kinds:['main'],
     specs:[
       {key:'warrior-arms',label:'Arms Warrior',class:'warrior',className:'Warrior',specName:'Arms',file:'MID2_Warrior_Arms.simc',tank:false,gear:{pieces:16,itemLevel:338.6,min:331,max:344},
@@ -35,7 +36,9 @@ test('the page carries every class, spec and tier, and no script but Wowhead’s
   const html=tierListPage(job);
   assert.match(html,/<h1>Weapon <em>tier list<\/em><\/h1>/);
   assert.match(html,/Midnight Season 2/);
-  assert.match(html,/item level 334/);
+  assert.match(html,/item level 321–344/,'the header states the span, since sources reach different levels');
+  assert.match(html,/delves Hero 6\/6/,'and what each source can give');
+  assert.match(html,/cannot be pushed onto the Myth track/);
   assert.match(html,/>Warrior</,'the class heading');
   assert.match(html,/>Arms<|Arms<\/h3>|>Arms/,'the specialization heading');
   assert.match(html,/Protection/);
