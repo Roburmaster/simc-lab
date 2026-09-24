@@ -53,13 +53,15 @@ Crest Planner answers "which item do I upgrade first?", as Raidbots does with it
 
 Costs come from the pinned upgrade data: each level costs its track's crests (Adventurer, Veteran, Champion, Hero and Myth Mistcrest in Midnight Season 2). The official SimulationCraft addon's export carries three comment lines that the app reads:
 
-- `upgrade_currencies`: the crests you have. They fill the "Crests you have" fields, which you can change.
+- `upgrade_currencies`: the crests you have. They fill the "Crests to spend" fields; lower them to keep some back.
 - `slot_high_watermarks`: the highest item level each slot has held, for the character and the warband. An upgrade to an item level at or below it costs no crests, as in the game.
 - `upgrade_achievements`: the warband crest achievements. The warband's high watermark counts only for a crest whose achievement is done.
 
 Without these lines, costs assume no discount and the crest fields are left for you to fill in.
 
-The result is a spending order: it repeatedly takes the upgrade with the most DPS (or tank score) per crest that the remaining crests pay for, and may skip a level when the one after pays better. Changing the crest numbers on the result recomputes the order without simulating again. Gains in different slots are treated as adding up, which is close but not exact for stats with diminishing returns. A table lists every measured upgrade by value per crest, with the crests any slot discount waived.
+By default only the upgrades your crests to spend pay for are simulated: an item is taken up level by level until the next level costs more than you have of its crest, and "Highest level only" then means the highest level you can afford. If nothing is affordable, the app says what the cheapest upgrade needs. Untick "Only upgrades these crests pay for" to simulate every level to the top of each track.
+
+The result is a spending order within those crests: it repeatedly takes the upgrade with the most DPS (or tank score) per crest that the remaining crests pay for, and may skip a level when the one after pays better. Changing the crest numbers on the result recomputes the order without simulating again. Gains in different slots are treated as adding up, which is close but not exact for stats with diminishing returns. A table lists every measured upgrade by value per crest, with the crests any slot discount waived.
 
 ## WoW addon (SimCLab)
 
