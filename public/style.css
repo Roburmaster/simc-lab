@@ -95,3 +95,15 @@
 .slot-chip span{color:var(--muted);margin-left:4px}
 .slot-chip.active{background:#302b23;border-color:#6d5a34;color:var(--amber)}
 .slot-chip.active span{color:var(--amber);opacity:.7}
+.crest-budget{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin:6px 0}
+.crest-budget label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.crest-budget input{width:100%}
+.crest-icon{width:18px;height:18px;border-radius:3px;vertical-align:-4px;margin-right:5px}
+.crest-free{color:var(--green)}
+.crest-plan{list-style:none;padding:0;margin:8px 0;display:grid;gap:6px}
+.crest-plan li{display:grid;grid-template-columns:auto minmax(0,1.6fr) minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#141a25;font-size:13px}
+.crest-plan li small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.crest-plan b{color:var(--amber);white-space:nowrap;text-align:right}
+.crest-step{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--amber);color:#10131b;font-weight:700;font-size:12px}
+.crest-plan-box{margin-bottom:14px}
+@media (max-width:700px){.crest-plan li{grid-template-columns:auto 1fr}.crest-plan li>span:nth-child(3),.crest-plan li>b{grid-column:2}.crest-plan b{text-align:left}}
