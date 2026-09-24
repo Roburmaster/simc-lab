@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {loadTalentData,decodeTalents,encodeTalents,validateBuild,pointTotals,generateCandidates} from '../lib/talents.mjs';
+import {loadTalentData,decodeTalents,encodeTalents,validateBuild,pointTotals,generateCandidates,selectedHero} from '../lib/talents.mjs';
 import {prepareTalents} from '../lib/optimizer.mjs';
 import {parseProfile,createVariants} from '../lib/profile.mjs';
 import {loadCatalog} from '../lib/catalog.mjs';
@@ -20,6 +20,18 @@ test('validator rejects overspending, disconnected nodes, invalid choices and cr
   const choice=structuredClone(build);choice.selected[leaf.id].entry=-1;assert.ok(validateBuild(choice,tree,{budgets}).some(e=>e.includes('choice')));
   assert.throws(()=>decodeTalents(profile.info.talents,data.trees.find(t=>t.specId===63)),/specialization/);
   const gated=structuredClone(build);for(const n of tree.specNodes)delete gated.selected[n.id];const capstone=tree.specNodes.find(n=>n.reqPoints===20);gated.selected[capstone.id]={entry:capstone.entries[0].id,rank:1,purchased:true};assert.ok(validateBuild(gated,tree,{budgets}).some(e=>e.includes('point-gated')));
+});
+test('engine profiles with hero nodes in both trees, purchased keystones or empty choice entries are legal',async()=>{
+  // Feral carries 14 nodes in its inactive hero tree, BM and MM mark their free keystones purchased,
+  // and Windwalker Conduit has a choice node with an empty second entry. SimC runs all three as written.
+  for(const spec of ['Druid_Feral','Hunter_Beast_Mastery','Hunter_Marksmanship','Monk_Windwalker_Conduit']){
+    const p=parseProfile((await referenceProfile(spec)).replace(/^timeofday=.*$/m,'')),t=data.find(p.info),b=decodeTalents(p.info.talents,t);
+    assert.deepEqual(validateBuild(b,t,{budgets,entries:data.entries}),[],spec);assert.deepEqual(pointTotals(b,t),budgets,spec);assert.equal(encodeTalents(b,t).replace(/A+$/,''),p.info.talents.replace(/A+$/,''),spec);
+  }
+  const feral=parseProfile((await referenceProfile('Druid_Feral')).replace(/^timeofday=.*$/m,'')),ft=data.find(feral.info),fb=decodeTalents(feral.info.talents,ft);
+  const r=generateCandidates(fb,ft,{limit:8,entries:data.entries});assert.equal(r.candidates.length,8);
+  const active=ft.heroNodes.find(n=>n.subTreeId===selectedHero(fb,ft)&&fb.selected[n.id]?.purchased&&!n.freeNode);
+  const mixed=structuredClone(fb);delete mixed.selected[active.id];assert.ok(validateBuild(mixed,ft,{budgets}).length,'the active hero tree is still checked');
 });
 test('generated builds retain budgets and explicit utility locks',()=>{
   const choice=tree.specNodes.find(n=>n.type==='choice'&&build.selected[n.id]);const locks={[choice.id]:true};const r=generateCandidates(build,tree,{limit:32,locks,entries:data.entries});assert.equal(r.candidates.length,32);
