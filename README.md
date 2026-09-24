@@ -1,6 +1,6 @@
 # SimC Lab
 
-A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, Weapon Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
+A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, Weapon Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
 
 **Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
 
@@ -12,7 +12,7 @@ For development, run `npm run install-engine` once and then `npm start` (http://
 
 1. Type /simc in WoW and paste the complete addon export.
 2. Click Import character.
-3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, or Talent Search.
+3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, or Talent Search.
 4. Set fight style, duration, target count, iterations and target error, then run the simulation.
 
 Weapon Lab is the exception: it ranks weapons for every specialization on SimulationCraft's own reference characters, so it runs without an import.
@@ -46,6 +46,20 @@ Candidates are filtered for your class and specialization: allowed classes, loot
 Results can be filtered by slot: pick Neck, Rings or Main hand and every item measured for that slot is listed — the upgrades, the ones that were no better, and the ones screening cut — so "why is this item not here?" has an answer on the page. The unfiltered lists are unchanged.
 
 Each scenario runs in two SimC profileset runs. Screening simulates every candidate with at most 2,000 iterations and a 0.5% target error. Candidates whose screened DPS could beat the current gear within the combined uncertainty then go to a final round with your iteration and target-error settings. The final round takes up to 24, 48 or 96 candidates, with a quota per slot. Results show the best upgrade per boss, dungeon or source, every measured upgrade, and screening results that were not simulated again. Screening-only numbers are labelled. A search is limited to 800 candidates. Some crafted pieces require the matching profession to equip, and the data does not say which ones.
+
+## Crest Planner
+
+Crest Planner answers "which item do I upgrade first?", as Raidbots does with its upgrade-currency option. Every equipped item on one of the season's upgrade tracks (Adventurer to Myth) is simulated at each higher level of its own track — or only fully upgraded, if you choose — in one SimC profileset run per scenario at your simulation settings. Enchants and gems stay as they are; only the track's bonus ID changes. Items outside the season's tracks (crafted gear, older seasons, item level overrides) are listed as not upgradeable.
+
+Costs come from the pinned upgrade data: each level costs its track's crests (Adventurer, Veteran, Champion, Hero and Myth Mistcrest in Midnight Season 2). The official SimulationCraft addon's export carries three comment lines that the app reads:
+
+- `upgrade_currencies`: the crests you have. They fill the "Crests you have" fields, which you can change.
+- `slot_high_watermarks`: the highest item level each slot has held, for the character and the warband. An upgrade to an item level at or below it costs no crests, as in the game.
+- `upgrade_achievements`: the warband crest achievements. The warband's high watermark counts only for a crest whose achievement is done.
+
+Without these lines, costs assume no discount and the crest fields are left for you to fill in.
+
+The result is a spending order: it repeatedly takes the upgrade with the most DPS (or tank score) per crest that the remaining crests pay for, and may skip a level when the one after pays better. Changing the crest numbers on the result recomputes the order without simulating again. Gains in different slots are treated as adding up, which is close but not exact for stats with diminishing returns. A table lists every measured upgrade by value per crest, with the crests any slot discount waived.
 
 ## WoW addon (SimCLab)
 
@@ -106,7 +120,7 @@ The reference profiles are otherwise SimulationCraft's own, generated from `prof
 
 ## Tank simulation
 
-Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder and Talent Search) then ranks results on DPS and survival.
+Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner and Talent Search) then ranks results on DPS and survival.
 
 SimC's built-in tank dummy uses level-70 damage values and never threatens a Midnight tank, and SimC gives players infinite health by default. SimC Lab replaces it with a calibrated boss, tuned once per job against the imported gear and then shared by every variant and scenario:
 
