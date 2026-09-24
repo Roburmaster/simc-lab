@@ -129,7 +129,7 @@ export function weaponUI({api,notice,updateCount}){
       }
       html+='</section>';
     }
-    html+='<p class="result-note">A tier is the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons inside the combined 95% uncertainty of the best one are marked; raise the precision before acting on small differences. A weapon marked ◆ completes an item set with the reference gear: its lead is that set's bonus, which every other weapon in the hand loses, so the rest of the hand is measured from the best weapon without one.</p>';
+    html+=`<p class="result-note">A tier is the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons inside the combined 95% uncertainty of the best one are marked; raise the precision before acting on small differences. A weapon marked ◆ completes an item set with the reference gear: its lead is that set's bonus, which every other weapon in the hand loses, so the rest of the hand is measured from the best weapon without one.</p>`;
     return html;
   }
   return {init,settings,count,results};
