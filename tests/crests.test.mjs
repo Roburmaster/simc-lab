@@ -47,17 +47,30 @@ test('a slot that already held the item level upgrades without crests; the accou
 });
 
 test('candidates swap only the track bonus, count crests from the equipped level and skip the top',()=>{
-  const plan=buildCrestCandidates(profile,text,{},season,catalog);
+  const plan=buildCrestCandidates(profile,text,{affordable:false},season,catalog);
   // Hero 3/6 (311) → 4, 5, 6. Hero 4/6 is 315: above the character mark 311, and the account mark is not unlocked for Hero.
   assert.deepEqual(plan.candidates.map(c=>[c.slot,c.to,c.crests,c.fullCrests]),[['head',4,20,20],['head',5,40,40],['head',6,60,60]]);
   assert.equal(plan.candidates[0].line,'head=,id=1,bonus_id=6652/12844/10355,enchant_id=9');
   assert.deepEqual(plan.items.map(i=>[i.slot,i.level]),[['head',3],['finger1',6]]);
   assert.deepEqual(plan.budget,{3445:45,3446:10,3008:900});
-  assert.deepEqual(buildCrestCandidates(profile,text,{levels:'max'},season,catalog).candidates.map(c=>c.to),[6]);
+  assert.deepEqual(buildCrestCandidates(profile,text,{levels:'max',affordable:false},season,catalog).candidates.map(c=>c.to),[6]);
   assert.deepEqual(buildCrestCandidates(profile,text,{budget:{[HERO]:100}},season,catalog).budget,{[HERO]:100});
   assert.throws(()=>buildCrestCandidates(profile,text,{slots:['finger1']},season,catalog),/already fully upgraded/);
   assert.throws(()=>buildCrestCandidates(profile,text,{slots:['main_hand']},season,catalog),/upgrade tracks/);
   assert.throws(()=>normalizeBudget({9999:1},season),/Unknown crest/);
+});
+
+test('only upgrades the crests pay for are simulated, from the export or typed',()=>{
+  // The export has 45 Hero crests: Hero 4/6 (20) and 5/6 (40) fit, 6/6 (60) does not.
+  const plan=buildCrestCandidates(profile,text,{},season,catalog);
+  assert.equal(plan.affordable,true);
+  assert.deepEqual(plan.candidates.map(c=>[c.to,c.crests]),[[4,20],[5,40]]);
+  assert.equal(plan.items[0].reach,5);assert.equal(plan.items[0].crests,60,'the cost to the top is still shown');
+  assert.deepEqual(buildCrestCandidates(profile,text,{levels:'max'},season,catalog).candidates.map(c=>c.to),[5],'highest level the crests reach');
+  assert.deepEqual(buildCrestCandidates(profile,text,{budget:{[HERO]:100}},season,catalog).candidates.map(c=>c.to),[4,5,6]);
+  assert.throws(()=>buildCrestCandidates(profile,text,{budget:{[HERO]:10}},season,catalog),/Nothing is affordable.*20 Hero Mistcrest/);
+  // Without any crest data there is no budget, so everything is simulated.
+  assert.deepEqual(buildCrestCandidates(profile,'warrior="Test"',{},season,catalog).candidates.map(c=>c.to),[4,5,6]);
 });
 
 test('the spending plan takes the best gain per crest it can pay for, and may skip levels',()=>{
