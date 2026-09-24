@@ -77,10 +77,18 @@ export function weaponUI({api,notice,updateCount}){
   }
 
   const tierClass=tier=>`tier tier-${tier}`;
+  // A set weapon's lead is the set bonus; the rest of the hand is measured from the best weapon without one.
+  function gapCell(row,c,tanky,sets){
+    const unit=tanky?'':' %';
+    if(c.set&&row.behind<0)return `+${(-row.behind).toFixed(2)}${unit}<small>with the set</small>`;
+    if(row.behind<=0)return sets&&!c.set?'—<small>best without a set bonus</small>':'—';
+    return `−${row.behind.toFixed(2)}${unit}${row.tied?'<small>within uncertainty</small>':''}`;
+  }
   function table(rows,candidates,tanky){
+    const sets=rows.some(r=>candidates.get(r.key)?.set);
     return `<table class="result-table weapon-table"><thead><tr><th>#</th><th>Item</th><th>${tanky?'Score':'DPS'}</th><th>Behind best</th><th>Tier</th></tr></thead><tbody>${rows.map(row=>{
       const c=candidates.get(row.key);if(!c)return '';
-      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${c.itemLevel?` · item level ${c.itemLevel}${c.levelLabel?` (${esc(c.levelLabel)})`:''}`:''}${row.screened?' · screening only':''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${row.rank===1?'—':`${tanky?`−${row.behind.toFixed(2)}`:`−${row.behind.toFixed(2)} %`}${row.tied?'<small>within uncertainty</small>':''}`}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
+      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${c.itemLevel?` · item level ${c.itemLevel}${c.levelLabel?` (${esc(c.levelLabel)})`:''}`:''}${row.screened?' · screening only':''}${c.set?`<br>◆ ${esc(c.set.name)} ${c.set.pieces}-set with ${esc(c.set.with.join(', '))}`:''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${gapCell(row,c,tanky,sets)}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
     }).join('')}</tbody></table>`;
   }
   function results(job){
@@ -105,7 +113,7 @@ export function weaponUI({api,notice,updateCount}){
       html+=`<section class="result-scenario"><h3>${esc(scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
       html+=`<h4 class="upgrade-heading">Best weapon per hand</h4><div class="upgrade-source-list">${done.flatMap(({spec,candidates,hands})=>hands.map(hand=>{
         const best=hand.rows.find(r=>r.rank===1)||hand.rows[0],c=candidates.get(best.key),runnerUp=hand.rows.find(r=>r.rank===2);
-        return `<div class="upgrade-source"><span><small>${esc(spec.className)} · ${esc(hand.name)}</small><strong>${esc(spec.specName)}</strong></span><span>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data?.kinds?.[c.kind]||c.kind)} · ${esc(c.sources[0]||'')}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}</small></span><b>${runnerUp?`+${runnerUp.behind.toFixed(2)}${runnerUp.tied?'?':''}`:'—'}</b></div>`;
+        return `<div class="upgrade-source"><span><small>${esc(spec.className)} · ${esc(hand.name)}</small><strong>${esc(spec.specName)}</strong></span><span>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data?.kinds?.[c.kind]||c.kind)} · ${esc(c.sources[0]||'')}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}</small></span><b>${runnerUp?`+${(runnerUp.behindFirst??runnerUp.behind).toFixed(2)}${runnerUp.tied?'?':''}`:'—'}</b></div>`;
       })).join('')}</div><p class="hint">The number is how far the second-best weapon of that hand falls behind; “?” means that gap is inside the statistical uncertainty.</p>`;
       for(const {spec,candidates,rows,hands,tanky} of done){
         const stages=(job.stages||[]).filter(st=>st.spec===spec.key&&st.scenario===s);
@@ -121,7 +129,7 @@ export function weaponUI({api,notice,updateCount}){
       }
       html+='</section>';
     }
-    html+='<p class="result-note">A tier is the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons inside the combined 95% uncertainty of the best one are marked; raise the precision before acting on small differences.</p>';
+    html+='<p class="result-note">A tier is the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons inside the combined 95% uncertainty of the best one are marked; raise the precision before acting on small differences. A weapon marked ◆ completes an item set with the reference gear: its lead is that set's bonus, which every other weapon in the hand loses, so the rest of the hand is measured from the best weapon without one.</p>';
     return html;
   }
   return {init,settings,count,results};

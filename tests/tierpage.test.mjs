@@ -80,3 +80,18 @@ test('each hand gets its own list, so a main hand is never ranked against an off
 test('a job without a Weapon Lab plan is refused',()=>{
   assert.throws(()=>tierListPage({...job,weapons:undefined}),/not a Weapon Lab run/);
 });
+
+test('a set weapon is marked, shows its lead, and the best without a set says so',()=>{
+  const set={name:"Bite of Zul'jan",pieces:2,with:["Zul'jin's Guillotine Technique"]};
+  const setJob={...job,weapons:{...job.weapons,specs:[{...job.weapons.specs[0],candidates:[candidate('w001',268213,"Maze'roa",{set}),candidate('w002',30,'Great axe')]}]},
+    stages:[job.stages[0]],
+    results:[
+      {spec:'warrior-arms',scenario:0,stage:2,key:'w001',status:'complete',dps:321000,error95:500,rank:1,behind:-7,behindFirst:0,tier:'S',tied:false,set:true},
+      {spec:'warrior-arms',scenario:0,stage:2,key:'w002',status:'complete',dps:300000,error95:500,rank:2,behind:0,behindFirst:6.54,tier:'S',tied:false,set:false}
+    ]};
+  const html=tierListPage(setJob);
+  assert.ok(html.includes('+7.00 % with the set'));
+  assert.match(html,/Bite of Zul&#39;jan 2-set with Zul&#39;jin&#39;s Guillotine Technique/);
+  assert.match(html,/best without a set bonus/);
+  assert.equal(html.includes('best in hand'),false);
+});
