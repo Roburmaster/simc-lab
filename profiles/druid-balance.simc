@@ -1,0 +1,42 @@
+# Balance Druid — SimC Lab's own reference profile.
+#
+# SimulationCraft has no profile for this specialization in the current season, so this one stands in for it.
+# It is dropped the moment SimulationCraft publishes its own: nothing here overrides the engine.
+#
+# Gear and talents: Icy Veins, patch 12.1, read 2026-09-23.
+#   https://www.icy-veins.com/wow/balance-druid-pve-dps-gear-best-in-slot
+#   https://www.icy-veins.com/wow/balance-druid-pve-dps-spec-builds-talents
+# Overall best in slot for Midnight Season 2. Consumables follow SimulationCraft's own MID1 profile for this specialization; the guide's page for them is not machine readable.
+# Item levels, enchant ranks and the crafting cap come from the pinned game data, not from the guide.
+# Written by scripts/build-profiles.mjs from profiles/druid-balance.json — edit that, not this file.
+
+druid="MPC_Balance_Druid"
+spec=balance
+level=90
+race=night_elf
+role=spell
+position=back
+talents=CYGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWoMbNMmZgxsMzMzMLMgxMLzswMzswyMLjxMjNMAYssNzgxsNAmAAAAswMzMwmxMGzAAYmBLDA
+
+flask=flask_of_the_magisters_2
+food=harandar_celebration
+potion=lights_potential_2
+augmentation=void_touched
+temporary_enchant=main_hand:thalassian_phoenix_oil_2
+
+head=enigmatic_dreamwatcher_s_somnolent_stare,id=271528,bonus_id=13848,redirected_base_stats=271875,gem_id=240900,enchant_id=7961
+neck=aqirbane_reliquary,id=268265,bonus_id=13848,gem_id=240983/240900
+shoulder=frothing_venom_spaulders,id=268246,bonus_id=12854,enchant_id=8001
+back=silken_voodoo_drape,id=268253,bonus_id=13848
+chest=enigmatic_dreamwatcher_s_lunar_raiment,id=271531,bonus_id=12854,enchant_id=7987
+wrist=restless_spirit_shackles,id=268240,bonus_id=12854,gem_id=240900
+hands=enigmatic_dreamwatcher_s_gauntlets,id=271529,bonus_id=12854
+waist=sash_of_the_forlorn_vessel,id=268256,bonus_id=13848,gem_id=240900
+legs=enigmatic_dreamwatcher_s_leggings,id=271527,bonus_id=13848,redirected_base_stats=268225,enchant_id=7935
+feet=silvermoon_agent_s_sneakers,id=244569,bonus_id=12497,ilevel=331,enchant_id=7993
+finger1=vile_alchemist_s_band,id=268249,bonus_id=12854,gem_id=240900,enchant_id=7967
+finger2=charged_sandstone_band,id=158366,bonus_id=12854,gem_id=240900,enchant_id=7967
+trinket1=vile_vial_of_volatile_venom,id=273796,bonus_id=12854
+trinket2=gebbo_s_bottomless_bag,id=270164,bonus_id=12854
+main_hand=jan_thrazet_the_soul_fang,id=271092,bonus_id=13848,enchant_id=8041
+off_hand=aln_hara_lantern,id=245769,bonus_id=12497,ilevel=331

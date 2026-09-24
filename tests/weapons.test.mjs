@@ -185,7 +185,11 @@ async function engineFolder(files){
 }
 const profileText=(actor,spec,extra='')=>`# comment\n${actor}\nspec=${spec}\nlevel=90\nrace=orc\nmain_hand=axe,id=10,enchant_id=5\n${extra}actions=auto_attack\nactions+=/slam\n`;
 const talentData={find(info){
-  const trees={'warrior-arms':{specId:71,className:'Warrior',specName:'Arms'},'warrior-protection':{specId:73,className:'Warrior',specName:'Protection'}};
+  // The warriors carry the candidate tests; the rest are the specializations profiles/ actually holds, so the
+  // profiles we ship are loaded here for real without needing the engine's talent data.
+  const trees={'warrior-arms':{specId:71,className:'Warrior',specName:'Arms'},'warrior-protection':{specId:73,className:'Warrior',specName:'Protection'},
+    'druid-balance':{specId:102,className:'Druid',specName:'Balance'},'druid-guardian':{specId:104,className:'Druid',specName:'Guardian'},
+    'evoker-devastation':{specId:1467,className:'Evoker',specName:'Devastation'}};
   const tree=trees[`${info.class}-${info.spec}`];if(!tree)throw new Error('no tree');return tree;
 }};
 
@@ -199,7 +203,8 @@ test('one reference profile per spec: the newest season, and the base build over
     'MID2/MID2_Priest_Holy.simc':profileText('priest="MID2_Priest_Holy"','holy')
   });
   clearReferenceCache();
-  const specs=await loadReferenceSpecs(dir,talentData);
+  // Our own profiles load here too; this test is about what the engine folder holds.
+  const specs=(await loadReferenceSpecs(dir,talentData)).filter(x=>!x.ours);
   assert.deepEqual(specs.map(s=>[s.key,s.season,s.file]),[['warrior-arms','MID2','MID2_Warrior_Arms.simc'],['warrior-protection','MID1','MID1_Warrior_Protection.simc']],'no holy priest: it has no talent tree here');
   // Protection has no profile for the newest season, so it is carrying an older character and says so.
   assert.deepEqual(specs.map(s=>s.stale),[false,true]);
@@ -209,10 +214,46 @@ test('one reference profile per spec: the newest season, and the base build over
   await fs.rm(dir,{recursive:true,force:true});
 });
 
+test('our own profile fills a gap, and stands down the moment the engine has one',async()=>{
+  // The real profiles/ folder is used, so this also proves the ones we ship are loadable.
+  const {ownProfiles}=await import('../lib/weapons.mjs');
+  const ours=await ownProfiles(talentData);
+  assert.ok(ours.length,'profiles/ holds at least one');
+  for(const spec of ours){
+    assert.equal(spec.ours,true);
+    assert.ok(spec.provenance?.name,`${spec.key}: says where it came from`);
+    assert.ok(spec.gear.main_hand,`${spec.key}: has a weapon to rank against`);
+  }
+  const key=ours[0].key,[cls,spec]=[ours[0].class,ours[0].spec];
+  const dir=await engineFolder({
+    // The engine has this specialization in the previous season only, so ours is used.
+    [`MID1/MID1_Old.simc`]:profileText(`${cls}="MID1_Old"`,spec),
+    [`MID2/MID2_Warrior_Arms.simc`]:profileText('warrior="MID2_Warrior_Arms"','arms')
+  });
+  clearReferenceCache();
+  const withGap=await loadReferenceSpecs(dir,talentData);
+  const mine=withGap.find(s=>s.key===key);
+  assert.ok(mine?.ours,`${key}: ours stands in for the missing season`);
+  assert.equal(mine.stale,false,'and is not treated as last season’s character');
+  assert.equal(mine.season,'MID2','it stands in for the newest season');
+  // Now the engine ships its own for the newest season: ours is dropped without a word.
+  const filled=await engineFolder({
+    [`MID2/MID2_New.simc`]:profileText(`${cls}="MID2_New"`,spec),
+    [`MID2/MID2_Warrior_Arms.simc`]:profileText('warrior="MID2_Warrior_Arms"','arms')
+  });
+  clearReferenceCache();
+  const after=(await loadReferenceSpecs(filled,talentData)).find(s=>s.key===key);
+  assert.ok(!after.ours,`${key}: the engine's own profile wins`);
+  assert.equal(after.file,'MID2_New.simc');
+  await fs.rm(dir,{recursive:true,force:true});await fs.rm(filled,{recursive:true,force:true});
+  clearReferenceCache();
+});
+
 test('engine options in a reference profile are accepted, but never in a pasted import',async()=>{
   const dir=await engineFolder({'MID2/MID2_Warrior_Arms.simc':profileText('warrior="MID2_Warrior_Arms"','arms','timeofday=night\nwarlock.soul_shards=3\n')});
   clearReferenceCache();
-  const specs=await loadReferenceSpecs(dir,talentData);
+  // Our own profiles load here too; this test is about what the engine folder holds.
+  const specs=(await loadReferenceSpecs(dir,talentData)).filter(x=>!x.ours);
   assert.match(specs[0].text,/timeofday=night/);
   const {parseProfile}=await import('../lib/profile.mjs');
   assert.throws(()=>parseProfile(profileText('warrior="Mine"','arms','timeofday=night\n')),/timeofday/);

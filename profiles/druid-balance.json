@@ -1,0 +1,44 @@
+{
+  "key": "druid-balance",
+  "class": "druid",
+  "spec": "balance",
+  "label": "Balance Druid",
+  "race": "night_elf",
+  "level": 90,
+  "role": "spell",
+  "position": "back",
+  "source": {
+    "name": "Icy Veins",
+    "gear": "https://www.icy-veins.com/wow/balance-druid-pve-dps-gear-best-in-slot",
+    "talents": "https://www.icy-veins.com/wow/balance-druid-pve-dps-spec-builds-talents",
+    "readAt": "2026-09-23",
+    "patch": "12.1",
+    "note": "Overall best in slot for Midnight Season 2. Consumables follow SimulationCraft's own MID1 profile for this specialization; the guide's page for them is not machine readable."
+  },
+  "talents": "CYGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWoMbNMmZgxsMzMzMLMgxMLzswMzswyMLjxMjNMAYssNzgxsNAmAAAAswMzMwmxMGzAAYmBLDA",
+  "consumables": {
+    "flask": "flask_of_the_magisters_2",
+    "food": "harandar_celebration",
+    "potion": "lights_potential_2",
+    "augmentation": "void_touched",
+    "temporary_enchant": "main_hand:thalassian_phoenix_oil_2"
+  },
+  "gear": [
+    {"slot":"head","name":"Enigmatic Dreamwatcher's Somnolent Stare","from":"Catalyst + Ula'tek","item":271528,"bonus":[13848],"original":271875,"gems":[240900],"enchant":243950},
+    {"slot":"neck","name":"Aqirbane Reliquary","from":"Ula'tek","item":268265,"bonus":[13848],"gems":[240983,240900]},
+    {"slot":"shoulder","name":"Frothing Venom Spaulders","from":"Vashnik","item":268246,"bonus":[12854],"enchant":243990},
+    {"slot":"back","name":"Silken Voodoo Drape","from":"Coiled Altar","item":268253,"bonus":[13848]},
+    {"slot":"chest","name":"Enigmatic Dreamwatcher's Lunar Raiment","from":"Catalyst or Vashnik","item":271531,"bonus":[12854],"enchant":243977},
+    {"slot":"wrist","name":"Restless Spirit Shackles","from":"Nek'zali","item":268240,"bonus":[13751,12497,13836],"gems":[240900],"embellish":240167},
+    {"slot":"hands","name":"Enigmatic Dreamwatcher's Gauntlets","from":"Catalyst or Entombed Sentinels","item":271529,"bonus":[12854]},
+    {"slot":"waist","name":"Sash of the Forlorn Vessel","from":"Coiled Altar","item":268256,"bonus":[13848],"gems":[240900]},
+    {"slot":"legs","name":"Enigmatic Dreamwatcher's Leggings","from":"Catalyst + Coiled Altar","item":271527,"bonus":[13848],"original":268225,"enchant":240133},
+    {"slot":"feet","name":"Silvermoon Agent's Sneakers","from":"Crafted by Leatherworking","item":244569,"bonus":[13751,12497,13836],"embellish":240167,"enchant":243983},
+    {"slot":"finger1","name":"Vile Alchemist's Band","from":"Vashnik","item":268249,"bonus":[12854],"gems":[240900],"enchant":243956},
+    {"slot":"finger2","name":"Charged Sandstone Band","from":"Temple of Sethraliss","item":158366,"bonus":[12854],"gems":[240900],"enchant":243956},
+    {"slot":"trinket1","name":"Vile Vial of Volatile Venom","from":"Altar of Fangs","item":273796,"bonus":[12854]},
+    {"slot":"trinket2","name":"Gebbo's Bottomless Bag","from":"Lost Explorers","item":270164,"bonus":[12854]},
+    {"slot":"main_hand","name":"Jan'thrazet, the Soul Fang","from":"Ula'tek","item":271092,"bonus":[13848],"enchant":244031},
+    {"slot":"off_hand","name":"Aln'hara Lantern","from":"Crafted by Inscription","item":245769,"bonus":[13751,12497,13836]}
+  ]
+}

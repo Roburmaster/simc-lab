@@ -94,7 +94,13 @@ Each specialization runs on its own. A list no longer than the final round size 
 
 Tiers measure the distance behind the best weapon of the same specialization: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. Weapons within the combined 95% uncertainty of the best one are marked as such. Absolute numbers are comparable within a specialization only; reference profiles are built by different authors and are not a class ranking.
 
-The reference profiles are SimulationCraft's own, generated from `profiles/generators/` in the engine: a gear set its authors assemble per specialization under stated rules (set pieces, raid, Mythic+, delve, PvP and crafted gear each up to their item level cap, sockets in the usual slots, gem and enchant IDs, no tertiary stats). Every result names the character it was measured on, with the item level its gear actually landed on, read from SimC's own report. A specialization SimulationCraft has not rebuilt for the current season keeps the previous season's character — tens of item levels below the rest — and is marked as such wherever it appears: its own order holds, but its numbers do not belong beside another specialization's.
+**When SimulationCraft has no profile.** Its authors rebuild the season profiles one specialization at a time, and some are left a season behind — in Midnight Season 2 that is Balance Druid, Guardian Druid and Devastation Evoker, which have no profile at all. Rather than rank this season's weapons on last season's character, SimC Lab carries one of its own for each of them, in `profiles/`. Each is a `.json` naming the guide it was built from, the pages and the date it was read, and a `.simc` generated from it by `node scripts/build-profiles.mjs`.
+
+Nothing in that data is taken on its word. The generator looks every item up in the pinned catalog: it must exist, be from the current expansion — or be reissued in the active season's own raid or Mythic+ tables, the same exception Upgrade Finder has — and fit the slot it was listed under. Gems must be current gems. An enchant named by its item is matched back to our own enchant and raised to its highest rank, which is what the season profiles wear. Crafted pieces are written the way SimulationCraft writes them, at the crafting cap rather than on a raid track. An item level that means nothing in the game data, or that sits below the cap of the second-highest track, is treated as a slip in the guide and replaced with what the season data gives — three such slips were caught when these were first built. The talents have to decode and pass the same legality check as an imported build.
+
+These profiles say plainly that they are ours, in the app and on the tier list page, and they stand down on their own: the loader reaches for one only where the engine has no profile for the newest season, so an engine update replaces it without anyone doing anything.
+
+The reference profiles are otherwise SimulationCraft's own, generated from `profiles/generators/` in the engine: a gear set its authors assemble per specialization under stated rules (set pieces, raid, Mythic+, delve, PvP and crafted gear each up to their item level cap, sockets in the usual slots, gem and enchant IDs, no tertiary stats). Every result names the character it was measured on, with the item level its gear actually landed on, read from SimC's own report. A specialization SimulationCraft has not rebuilt for the current season keeps the previous season's character — tens of item levels below the rest — and is marked as such wherever it appears: its own order holds, but its numbers do not belong beside another specialization's.
 
 **The tier list page.** A finished job offers one page holding every class and specialization it covered, each hand separately, with each weapon in its tier, where it drops, the stat pair a crafted item was ranked at, and a link to Wowhead that shows the item's tooltip on hover. Open it in the app or save it and send it on: everything but that tooltip script is in the file, so it reads the same from a folder as it does from the app.
 
@@ -179,6 +185,7 @@ The default WoW build file is C:\Program Files (x86)\World of Warcraft\.build.in
     npm test
     node tests/integration.mjs
     node tests/upgrade-integration.mjs
+    node scripts/build-profiles.mjs
     node tests/weapon-integration.mjs
     node tests/tank-integration.mjs
     node tests/english-browser.cjs

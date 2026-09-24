@@ -37,6 +37,33 @@ test('calibration scales pressure and resizes the buster toward the death target
   assert.ok(boss.measured.reached,JSON.stringify(boss.measured));
 });
 
+test('a tank that absorbs the probe whole is swung at harder until something lands',async()=>{
+  const tank=normalizeTank({preset:'mythic'},{class:'druid',spec:'guardian'});
+  const hp=1.2e6,wall=5e6;const swings=[];
+  // This character takes nothing at all below `wall` a swing: no damage, and so no health reported either,
+  // which is what a heavily absorbing Guardian did to the old fixed probe.
+  const simulate=async boss=>{
+    const length=300,raw=boss.auto+boss.dot;
+    swings.push(raw);
+    const lands=raw<=wall?0:(raw-wall)/8;
+    const deaths=boss.immortal?0:Math.min(1,boss.buster/(hp*8*0.6)*0.25);
+    return {sim:{statistics:{simulation_length:{mean:length}},players:[{collected_data:{dtps:{mean:lands/2*length},hps:{mean:0},aps:{mean:0},fight_length:{mean:length,count:300},dps:{mean:1,count:300},deaths:{count:Math.round(deaths*300)},
+      buffed_stats:lands>0?{resources:{health:hp}}:{}}}],
+      targets:[{name:'Tank_Boss',stats:[{name:'melee_main_hand_x',compound_amount:lands/2*length},...(boss.buster?[{name:'melee_nuke_x',compound_amount:boss.buster/8*10,num_executes:{mean:10}}]:[])]}]}};
+  };
+  const boss=await calibrate(tank,simulate);
+  assert.ok(swings[0]<=wall,'it starts where it always did');
+  assert.ok(Math.max(...swings)>wall,'and keeps raising the swing until the tank feels it');
+  assert.equal(boss.health,hp,'the health it could not read before is read now');
+  assert.ok(boss.auto>0&&Number.isFinite(boss.buster));
+});
+
+test('a tank nothing can reach is reported, not guessed at',async()=>{
+  const tank=normalizeTank({preset:'mythic'},{class:'druid',spec:'guardian'});
+  const simulate=async()=>({sim:{statistics:{simulation_length:{mean:300}},players:[{collected_data:{dtps:{mean:0},fight_length:{mean:300,count:20},dps:{mean:1,count:20},deaths:{count:0},buffed_stats:{}}}],targets:[{name:'Tank_Boss',stats:[]}]}});
+  await assert.rejects(calibrate(tank,simulate),/could not read the character/);
+});
+
 test('survival combines net damage and survived time; profilesets read fight length, not death times',()=>{
   const boss={health:1e6,pressure:5};const base={dtps:50000,hps:10000,alive:0.8};
   assert.equal(survivalGain({dtps:49000,hps:10000,alive:0.8},base,boss),2);

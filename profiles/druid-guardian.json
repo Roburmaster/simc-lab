@@ -1,0 +1,43 @@
+{
+  "key": "druid-guardian",
+  "class": "druid",
+  "spec": "guardian",
+  "label": "Guardian Druid",
+  "race": "night_elf",
+  "level": 90,
+  "role": "tank",
+  "position": "front",
+  "source": {
+    "name": "Icy Veins",
+    "gear": "https://www.icy-veins.com/wow/guardian-druid-pve-tank-gear-best-in-slot",
+    "talents": "https://www.icy-veins.com/wow/guardian-druid-pve-tank-spec-builds-talents",
+    "readAt": "2026-09-23",
+    "patch": "12.1",
+    "note": "Overall best in slot for Midnight Season 2. Consumables follow SimulationCraft's own MID1 profile for this specialization; the guide's page for them is not machine readable."
+  },
+  "talents": "CgGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgZmxsMmZMziZZGmZZZgZzwoJamZWmZmZmlxMAAAAAAMzsMDAAAAamlZZmZGAALYmHAYxMYAbWAAzsBD",
+  "consumables": {
+    "flask": "flask_of_the_blood_knights_2",
+    "food": "harandar_celebration",
+    "potion": "lights_potential_2",
+    "augmentation": "void_touched",
+    "temporary_enchant": "main_hand:thalassian_phoenix_oil_2"
+  },
+  "gear": [
+    {"slot":"head","name":"Gaze of the Coiled Watcher","from":"Ula'tek","item":271875,"bonus":[13848],"gems":[240906],"enchant":243950},
+    {"slot":"neck","name":"Aqirbane Reliquary","from":"Ula'tek","item":268265,"bonus":[13848,13708,10835],"gems":[240983,240906]},
+    {"slot":"shoulder","name":"Enigmatic Dreamwatcher's Plumage","from":"Catalyst or Lost Explorers","item":271526,"bonus":[13848],"enchant":243990},
+    {"slot":"back","name":"Silken Voodoo Drape","from":"Coiled Altar","item":268253,"bonus":[13848]},
+    {"slot":"chest","name":"Enigmatic Dreamwatcher's Lunar Raiment","from":"Catalyst or Vashnik","item":271531,"bonus":[13848],"enchant":243977},
+    {"slot":"wrist","name":"Silvermoon Agent's Deflectors","from":"Crafted by Leatherworking","item":244576,"bonus":[13848],"gems":[240906]},
+    {"slot":"hands","name":"Enigmatic Dreamwatcher's Gauntlets","from":"Catalyst or Entombed Sentinels","item":271529,"bonus":[13848]},
+    {"slot":"waist","name":"Sash of the Forlorn Vessel","from":"Coiled Altar","item":268256,"bonus":[13848],"gems":[240906]},
+    {"slot":"legs","name":"Enigmatic Dreamwatcher's Leggings","from":"Catalyst or Coiled Altar","item":271527,"bonus":[13848],"enchant":244640},
+    {"slot":"feet","name":"Bespittled Slitherslippers","from":"Twin Fangs","item":268261,"bonus":[13848],"enchant":243983},
+    {"slot":"finger1","name":"Apex Brute's Claw Ring","from":"Sszorak","item":268252,"bonus":[13848],"gems":[240906],"enchant":243956},
+    {"slot":"finger2","name":"Vile Alchemist's Band","from":"Vashnik","item":268249,"bonus":[13848],"gems":[240906],"enchant":243956},
+    {"slot":"trinket1","name":"Gebbo's Bottomless Bag","from":"Lost Explorers","item":270164,"bonus":[13848]},
+    {"slot":"trinket2","name":"Zul'jin's Guillotine Technique","from":"Coiled Altar","item":270173,"bonus":[13654]},
+    {"slot":"main_hand","name":"Abyssal Broodfiend's Bardiche","from":"Ula'tek","item":268215,"bonus":[13654],"enchant":243973}
+  ]
+}

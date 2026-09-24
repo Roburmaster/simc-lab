@@ -1,0 +1,41 @@
+# Guardian Druid — SimC Lab's own reference profile.
+#
+# SimulationCraft has no profile for this specialization in the current season, so this one stands in for it.
+# It is dropped the moment SimulationCraft publishes its own: nothing here overrides the engine.
+#
+# Gear and talents: Icy Veins, patch 12.1, read 2026-09-23.
+#   https://www.icy-veins.com/wow/guardian-druid-pve-tank-gear-best-in-slot
+#   https://www.icy-veins.com/wow/guardian-druid-pve-tank-spec-builds-talents
+# Overall best in slot for Midnight Season 2. Consumables follow SimulationCraft's own MID1 profile for this specialization; the guide's page for them is not machine readable.
+# Item levels, enchant ranks and the crafting cap come from the pinned game data, not from the guide.
+# Written by scripts/build-profiles.mjs from profiles/druid-guardian.json — edit that, not this file.
+
+druid="MPC_Guardian_Druid"
+spec=guardian
+level=90
+race=night_elf
+role=tank
+position=front
+talents=CgGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgZmxsMmZMziZZGmZZZgZzwoJamZWmZmZmlxMAAAAAAMzsMDAAAAamlZZmZGAALYmHAYxMYAbWAAzsBD
+
+flask=flask_of_the_blood_knights_2
+food=harandar_celebration
+potion=lights_potential_2
+augmentation=void_touched
+temporary_enchant=main_hand:thalassian_phoenix_oil_2
+
+head=gaze_of_the_coiled_watcher,id=271875,bonus_id=13848,gem_id=240906,enchant_id=7961
+neck=aqirbane_reliquary,id=268265,bonus_id=13848/13708/10835,gem_id=240983/240906
+shoulder=enigmatic_dreamwatcher_s_plumage,id=271526,bonus_id=13848,enchant_id=8001
+back=silken_voodoo_drape,id=268253,bonus_id=13848
+chest=enigmatic_dreamwatcher_s_lunar_raiment,id=271531,bonus_id=13848,enchant_id=7987
+wrist=silvermoon_agent_s_deflectors,id=244576,ilevel=331,gem_id=240906
+hands=enigmatic_dreamwatcher_s_gauntlets,id=271529,bonus_id=13848
+waist=sash_of_the_forlorn_vessel,id=268256,bonus_id=13848,gem_id=240906
+legs=enigmatic_dreamwatcher_s_leggings,id=271527,bonus_id=13848,enchant_id=8159
+feet=bespittled_slitherslippers,id=268261,bonus_id=13848,enchant_id=7993
+finger1=apex_brute_s_claw_ring,id=268252,bonus_id=13848,gem_id=240906,enchant_id=7967
+finger2=vile_alchemist_s_band,id=268249,bonus_id=13848,gem_id=240906,enchant_id=7967
+trinket1=gebbo_s_bottomless_bag,id=270164,bonus_id=13848
+trinket2=zul_jin_s_guillotine_technique,id=270173,bonus_id=13848
+main_hand=abyssal_broodfiend_s_bardiche,id=268215,bonus_id=13846/13848,enchant_id=7983

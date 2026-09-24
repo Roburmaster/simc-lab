@@ -1,0 +1,42 @@
+# Devastation Evoker — SimC Lab's own reference profile.
+#
+# SimulationCraft has no profile for this specialization in the current season, so this one stands in for it.
+# It is dropped the moment SimulationCraft publishes its own: nothing here overrides the engine.
+#
+# Gear and talents: Icy Veins, patch 12.1, read 2026-09-23.
+#   https://www.icy-veins.com/wow/devastation-evoker-pve-dps-gear-best-in-slot
+#   https://www.icy-veins.com/wow/devastation-evoker-pve-dps-spec-builds-talents
+# Overall best in slot for Midnight Season 2. Consumables follow SimulationCraft's own MID1 profile for this specialization; the guide's page for them is not machine readable.
+# Item levels, enchant ranks and the crafting cap come from the pinned game data, not from the guide.
+# Written by scripts/build-profiles.mjs from profiles/evoker-devastation.json — edit that, not this file.
+
+evoker="MPC_Devastation_Evoker"
+spec=devastation
+level=90
+race=dracthyr
+role=spell
+position=back
+talents=CsbBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAjZwgZGmBGYMTjZmpZmZ2mZmZmZmZmZGwMzMzYmZbmZgBGD2glxox2AYGA2wMYmBDPA
+
+flask=flask_of_the_shattered_sun_2
+food=silvermoon_parade
+potion=lights_potential_2
+augmentation=void_touched
+temporary_enchant=main_hand:thalassian_phoenix_oil_2
+
+head=calamitous_echo_s_magmashapers,id=271501,bonus_id=12854,redirected_base_stats=239035,gem_id=240983,enchant_id=8017
+neck=aqirbane_reliquary,id=268265,bonus_id=13848/13987,gem_id=240906
+shoulder=calamitous_echo_s_sundered_peaks,id=271499,bonus_id=13848,redirected_base_stats=268231,enchant_id=7973
+back=silken_voodoo_drape,id=268253,bonus_id=13848
+chest=searing_caldera_of_calamity,id=271504,bonus_id=13848/13846,redirected_base_stats=271876,enchant_id=7987
+wrist=farstrider_s_plated_bracers,id=244584,bonus_id=12497/12666/12384,ilevel=331,crafted_stats=32/49,gem_id=240906
+hands=calamitous_echo_s_ebon_greathorns,id=271502,bonus_id=12854,redirected_base_stats=268238
+waist=farstrider_s_trophy_belt,id=244581,bonus_id=12497/12666/12384,ilevel=331,crafted_stats=32/49,gem_id=240906
+legs=earthen_pillars_of_calamity,id=271500,bonus_id=13848,redirected_base_stats=268237,enchant_id=7935
+feet=ferocious_scaleboots,id=268233,bonus_id=12854,enchant_id=7963
+finger1=vile_alchemist_s_band,id=268249,bonus_id=12854,gem_id=240906,enchant_id=7967
+finger2=apex_brute_s_claw_ring,id=268252,bonus_id=12854,gem_id=240906,enchant_id=7967
+trinket1=gebbo_s_bottomless_bag,id=270164,bonus_id=12854
+trinket2=font_of_venomous_rage,id=270168,bonus_id=12854
+main_hand=jan_thrazet_the_soul_fang,id=271092,bonus_id=13848
+off_hand=spine_of_the_hissing_abyss,id=268197,bonus_id=12854
