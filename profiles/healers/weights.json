@@ -1,0 +1,33 @@
+{
+  "source": {
+    "name": "QE Live",
+    "url": "https://questionablyepic.com/live",
+    "repository": "https://github.com/Voulk/QuestionablyEpic",
+    "commit": "1a26b8e8459da1e37e2fa8335252865f91ebc942",
+    "readAt": "2026-09-25",
+    "note": "The default stat weights QE Live uses for Quick Compare and its trinket chart, per point with intellect at 1. Entered by hand; the repository carries no licence, so none of its code is used. QE Live's Top Gear runs its own healing model instead of these weights."
+  },
+  "specs": [
+    {"class":"druid","spec":"restoration","file":"RestoDruid/DruidHealingFocus.js",
+      "dungeon":{"haste":0.76,"crit":0.48,"mastery":0.8,"versatility":0.49},
+      "raid":{"haste":0.87,"crit":0.425,"mastery":0.786,"versatility":0.491}},
+    {"class":"evoker","spec":"preservation","file":"PreservationEvoker/FlameshaperEvokerDefaults.js + ChronowardenEvokerDefaults.js","heroTrees":["Flameshaper","Chronowarden"],
+      "dungeon":[{"haste":0.695,"crit":0.735,"mastery":0.74,"versatility":0.68},{"haste":0.75,"crit":0.74,"mastery":0.7,"versatility":0.55}],
+      "raid":[{"haste":0.65,"crit":0.78,"mastery":0.8,"versatility":0.53},{"haste":0.645,"crit":0.802,"mastery":0.79,"versatility":0.528}]},
+    {"class":"monk","spec":"mistweaver","file":"MistweaverMonk/MonkDefaults.js",
+      "dungeon":{"haste":0.7,"crit":0.548,"mastery":0.59,"versatility":0.54},
+      "raid":{"haste":0.76,"crit":0.56,"mastery":0.27,"versatility":0.53}},
+    {"class":"paladin","spec":"holy","file":"HolyPaladin/HolyPaladinDefaults.js",
+      "dungeon":{"haste":0.58,"crit":0.57,"mastery":0.65,"versatility":0.54},
+      "raid":{"haste":0.587,"crit":0.595,"mastery":0.72,"versatility":0.54}},
+    {"class":"priest","spec":"discipline","file":"DisciplinePriest/DiscPriestVoidweaver.js",
+      "dungeon":{"haste":0.75,"crit":0.572,"mastery":0.63,"versatility":0.56},
+      "raid":{"haste":0.861,"crit":0.568,"mastery":0.59,"versatility":0.56}},
+    {"class":"priest","spec":"holy","file":"HolyPriest/HolyPriestDefaults.js",
+      "dungeon":{"haste":0.46,"crit":0.59,"mastery":0.53,"versatility":0.52},
+      "raid":{"haste":0.46,"crit":0.59,"mastery":0.53,"versatility":0.52}},
+    {"class":"shaman","spec":"restoration","file":"RestoShaman/RestoShamanDefaults.js",
+      "dungeon":{"haste":0.66,"crit":0.76,"mastery":0.54,"versatility":0.58},
+      "raid":{"haste":0.72,"crit":0.77,"mastery":0.55,"versatility":0.59}}
+  ]
+}
