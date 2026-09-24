@@ -290,3 +290,37 @@ test('a plan counts its runs and refuses a selection that cannot be simulated',a
   await assert.rejects(prepareWeapons({weapons:{specs:['warrior-arms']}},catalog,season,talentData,dir,3000),/Narrow it/);
   await fs.rm(dir,{recursive:true,force:true});
 });
+
+test('a weapon that completes an item set with the reference gear is found, and only that one',async()=>{
+  const {parseSetBonuses}=await import('../lib/catalog.mjs');
+  const bonuses=parseSetBonuses([
+    '  // SetBonusName , OptName , Tier , EnumID, SetID, Bns, Cls, Spec, TraitTree, SpellID, ItemIDs',
+    `  { "Bite of Zul'jan"   , "bite_of_zuljan" ,    "MID_BOZ",     28,  2070,   2,   1,   -1,        -1, 1291726, { 270173, 268209, 268213,  0 } },`,
+    `  { "Bite of Zul'jan"   , "bite_of_zuljan" ,    "MID_BOZ",     28,  2070,   2,   2,   -1,        -1, 1291726, { 270173, 268209, 268213,  0 } },`
+  ].join('\n'));
+  assert.deepEqual(bonuses[0],{name:"Bite of Zul'jan",setId:2070,pieces:2,classId:1,specId:-1,spellId:1291726,items:[270173,268209,268213]});
+  const setCatalog={items:new Map([[270173,{name:"Zul'jin's Guillotine Technique"}],[268213,{name:"Maze'roa"}]]),setBonuses:bonuses};
+  const fury={info:{class:'warrior'},specId:72,gear:{trinket2:gear('trinket2',270173),main_hand:gear('main_hand',268213),off_hand:gear('off_hand',237847)}};
+  const {completedSet}=await import('../lib/weapons.mjs');
+  assert.deepEqual(completedSet(fury,'main_hand',268213,setCatalog),{name:"Bite of Zul'jan",pieces:2,with:["Zul'jin's Guillotine Technique"]},'Maze\'roa in the main hand pairs with the trinket');
+  assert.equal(completedSet(fury,'main_hand',268209,setCatalog)?.name,"Bite of Zul'jan",'so does the other set weapon');
+  assert.equal(completedSet(fury,'main_hand',30,setCatalog),null,'a weapon outside the set brings nothing');
+  assert.equal(completedSet(fury,'off_hand',268209,setCatalog),null,'in the off hand the set is already complete without it');
+  assert.equal(completedSet({...fury,info:{class:'mage'}},'main_hand',268213,setCatalog),null,'a bonus for another class does not count');
+  assert.equal(completedSet(fury,'main_hand',268213,{items:new Map()}),null,'an engine without set data knows no sets');
+});
+
+test('a set weapon is ranked ahead but the rest of the hand is tiered without it',()=>{
+  const rows=[
+    {key:'set',status:'complete',dps:1070,error95:5},
+    {key:'a',status:'complete',dps:1000,error95:5},
+    {key:'b',status:'complete',dps:990,error95:5},
+    {key:'c',status:'complete',dps:960,error95:5}
+  ];
+  const ranked=rankWeaponRows(rows,null,undefined,row=>row.key==='set');
+  assert.deepEqual(ranked.map(r=>r.key),['set','a','b','c'],'the order is still the simulated one');
+  assert.deepEqual(ranked.map(r=>r.tier),['S','S','A','C'],'without the set bonus the field spreads across the tiers again');
+  assert.equal(ranked[0].behind.toFixed(2),'-7.00','the set weapon\'s lead over the best without one');
+  assert.equal(ranked[1].behindFirst.toFixed(2),'6.54','and the plain distance to rank 1 is kept');
+  assert.deepEqual(ranked.map(r=>r.set),[true,false,false,false]);
+});
