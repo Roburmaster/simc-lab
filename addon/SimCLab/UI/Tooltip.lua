@@ -18,14 +18,14 @@ function ns.TooltipLines(link)
   local where = {}
   local track = ns.TrackLabel(r)
   if track then where[#where + 1] = track end
-  if r.sources[1] then where[#where + 1] = ns.SourceShort(r.sources[1]) end
+  if r.sources[1] then where[#where + 1] = ns.SourceShort(r.sources[1], r.itemId) end
   local context = #where > 0 and table.concat(where, ", ") or nil
   local text = UI.Paint(ns.FormatValue(r, scenario), UI.ValueColor(value))
   local line
   if exact then
     line = PREFIX .. text .. (context and (" (" .. ns.Plain(context) .. ")") or "")
   else
-    line = PREFIX .. text .. UI.Paint(" at " .. ns.Plain(track or "another level") .. (r.sources[1] and (" (" .. ns.Plain(ns.SourceShort(r.sources[1])) .. ")") or ""), UI.colors.muted)
+    line = PREFIX .. text .. UI.Paint(" at " .. ns.Plain(track or "another level") .. (r.sources[1] and (" (" .. ns.Plain(ns.SourceShort(r.sources[1], r.itemId)) .. ")") or ""), UI.colors.muted)
   end
   local notes = {}
   if ns.Uncertain(r, scenario) then notes[#notes + 1] = "within the error" end

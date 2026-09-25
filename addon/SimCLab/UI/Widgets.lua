@@ -305,7 +305,7 @@ function UI.ResultRow(result, scenario, specId, extra)
   if result.slot then detail[#detail + 1] = ns.SLOT_NAMES[result.slot] or result.slot end
   local track = ns.TrackLabel(result)
   if track then detail[#detail + 1] = track end
-  if result.sources[1] then detail[#detail + 1] = ns.SourceShort(result.sources[1]) .. (#result.sources > 1 and (" +" .. (#result.sources - 1)) or "") end
+  if result.sources[1] then detail[#detail + 1] = ns.SourceShort(result.sources[1], result.itemId) .. (#result.sources > 1 and (" +" .. (#result.sources - 1)) or "") end
   local row = {
     title = result.itemId and itemName(result) or ns.Plain(result.name or "Result"),
     detail = ns.Plain(table.concat(detail, "  ·  ")),

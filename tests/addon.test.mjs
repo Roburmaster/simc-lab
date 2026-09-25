@@ -212,14 +212,19 @@ test('the Encounter Journal shows the farm for the instance and boss on display'
   await w.run('__mock.event("ADDON_LOADED", "Blizzard_EncounterJournal") EncounterJournal_DisplayInstance(1320)');
   assert.equal(await w.get('SimCLabJournal:IsShown()'),true);
   assert.equal(plain(await w.get('SimCLabJournal.title:GetText()')),'SimC Lab farm: Instance 1320');
-  assert.equal(await w.get('#SimCLabJournal.list.items'),1,'the crown; the pendant is a loss and the vault copy is no journal loot');
-  assert.match(await w.get('SimCLabJournal.list.items[1].title'),/Ula'tek's Crown/);
+  assert.equal(await w.get('#SimCLabJournal.list.items'),2,'the crown under its boss; the pendant is a loss and the vault copy is no journal loot');
+  assert.equal(await w.get('SimCLabJournal.list.items[1].header'),true);
+  assert.equal(await w.get('SimCLabJournal.list.items[1].title'),"Ula'tek",'the boss is the heading, without the difficulty the track already says');
+  assert.match(await w.get('SimCLabJournal.list.items[2].title'),/Ula'tek's Crown/);
+  assert.doesNotMatch(plain(await w.get('SimCLabJournal.list.items[2].detail')),/Ula'tek/,'so the row has room for slot and track');
   await w.run('EncounterJournal_DisplayEncounter(2895)');
   assert.equal(plain(await w.get('SimCLabJournal.title:GetText()')),'SimC Lab farm: Encounter 2895');
+  assert.match(await w.get('SimCLabJournal.list.items[1].title'),/Ula'tek's Crown/,'one boss on display needs no heading');
   await w.run('EncounterJournal_DisplayEncounter(2888)');
   assert.equal(await w.get('SimCLabJournal:IsShown()'),false,"Nek'zali drops nothing worth farming");
   await w.run('EncounterJournal_DisplayInstance(1322)');
-  assert.match(await w.get('SimCLabJournal.list.items[1].title'),/Fang of the Altar/);
+  assert.equal(await w.get('SimCLabJournal.list.items[1].title'),'Altar of Fangs','a dungeon boss not in the journal yet falls back to the dungeon');
+  assert.match(await w.get('SimCLabJournal.list.items[2].title'),/Fang of the Altar/);
   await w.run('EncounterJournal:Hide()');
   assert.equal(await w.get('SimCLabJournal:IsShown()'),false);
   w.close();
@@ -232,12 +237,46 @@ test('entering a dungeon with something to farm shows it once',async()=>{
   assert.equal(await w.get('SimCLabEntrance:IsShown()'),true);
   assert.equal(plain(await w.get('SimCLabEntrance.title:GetText()')),'SimC Lab farm: Altar of Fangs');
   assert.equal(plain(await w.get('SimCLabEntrance.subtitle:GetText()')),'1 upgrade, 1 still missing');
-  await w.run('__mock.runTimers(60)');
-  assert.equal(await w.get('SimCLabEntrance:IsShown()'),false,'it goes away by itself');
+  await w.run('__mock.runTimers(120)');
+  assert.equal(await w.get('SimCLabEntrance:IsShown()'),true,'it stays until closed');
+  await w.run('__mock.event("PLAYER_REGEN_DISABLED")');
+  assert.equal(await w.get('SimCLabEntrance:IsShown()'),false,'combat tucks it away');
+  await w.run('__mock.event("PLAYER_REGEN_ENABLED")');
+  assert.equal(await w.get('SimCLabEntrance:IsShown()'),true,'and brings it back after');
   await w.run('__mock.event("ZONE_CHANGED_NEW_AREA") __mock.runTimers()');
+  assert.equal(await w.get('SimCLabEntrance:IsShown()'),true,'a zone change inside the instance keeps it');
+  await w.run('__mock.instance = { inInstance = false, kind = "none" } __mock.event("PLAYER_ENTERING_WORLD") __mock.runTimers()');
+  assert.equal(await w.get('SimCLabEntrance:IsShown()'),false,'leaving the instance hides it');
+  await w.run('__mock.instance = { inInstance = true, kind = "party", map = 2500, journal = 1322, name = "Altar of Fangs" } __mock.event("PLAYER_ENTERING_WORLD") __mock.runTimers() __mock.event("PLAYER_REGEN_ENABLED")');
   assert.equal(await w.get('SimCLabEntrance:IsShown()'),false,'once per instance and session');
   await w.run('__mock.instance.journal = 1041 __mock.event("PLAYER_ENTERING_WORLD") __mock.runTimers()');
   assert.equal(await w.get('SimCLabEntrance:IsShown()'),false,"nothing to farm in Kings' Rest");
+  w.close();
+});
+
+test('a dungeon item names the boss that drops it, read from the Encounter Journal',async()=>{
+  const w=await world({data:dataText()});
+  await w.run(`${equip}
+    __mock.ejLoot[1322] = { { itemID = 250002, encounterID = 2600 } }
+    __mock.ej.classId, __mock.ej.specId = 11, 104`);
+  await w.login();
+  await w.run('__mock.runTimers(10)');
+  assert.equal(await w.get('__mock.ej.scans'),1,'read once, up front');
+  assert.deepEqual([await w.get('__mock.ej.classId'),await w.get('__mock.ej.specId')],[11,104],'the journal filter is put back');
+  assert.ok((await tooltip(w,'__mock.link(250002, {12841})')).some(l=>plain(l).includes('Altar of Fangs: Encounter 2600')));
+  await w.run(`__mock.instance = { inInstance = true, kind = "party", map = 2500, journal = 1322, name = "Altar of Fangs" }
+    __mock.event("PLAYER_ENTERING_WORLD") __mock.runTimers()`);
+  assert.equal(await w.get('SimCLabEntrance.list.items[1].title'),'Encounter 2600','the boss heads its items');
+  assert.match(await w.get('SimCLabEntrance.list.items[2].title'),/Fang of the Altar/);
+  await w.run(`EncounterJournal = __mock.newWidget("Frame", "EncounterJournal")
+    function EncounterJournal_DisplayInstance(id) EncounterJournal.instanceID = id end
+    function EncounterJournal_DisplayEncounter(id) EncounterJournal.encounterID = id end
+    __mock.event("ADDON_LOADED", "Blizzard_EncounterJournal") EncounterJournal:Show()
+    EncounterJournal_DisplayInstance(1322) EncounterJournal_DisplayEncounter(2601)`);
+  assert.equal(await w.get('SimCLabJournal:IsShown()'),false,'another boss of the dungeon does not drop it');
+  await w.run('EncounterJournal_DisplayEncounter(2600)');
+  assert.match(await w.get('SimCLabJournal.list.items[1].title'),/Fang of the Altar/);
+  assert.equal(await w.get('__mock.ej.scans'),1,'the open journal is never rescanned');
   w.close();
 });
 
