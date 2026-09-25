@@ -1,0 +1,44 @@
+{
+  "key": "evoker-augmentation",
+  "class": "evoker",
+  "spec": "augmentation",
+  "label": "Augmentation Evoker",
+  "race": "dracthyr",
+  "level": 90,
+  "role": "spell",
+  "position": "back",
+  "source": {
+    "name": "Icy Veins",
+    "gear": "https://www.icy-veins.com/wow/augmentation-evoker-pve-dps-gear-best-in-slot",
+    "talents": "Talent build supplied by the SimC Lab maintainer on 2026-09-25 (Icy Veins' talent page was not used)",
+    "readAt": "2026-09-25",
+    "patch": "12.1",
+    "note": "Overall best in slot for Midnight Season 2, with gems, enchants and consumables from https://www.icy-veins.com/wow/augmentation-evoker-pve-dps-gems-enchants-consumables. Mastery is the stat the guide stacks, so the ring enchant, flask and potion are the mastery ones."
+  },
+  "talents": "CEcBAAAAAAAAAAAAAAAAAAAAAMMzMbzMzgZYmZZGzMjZ2AAAAAAAAYmhZGYM1YmZGAAAAMjZMmZWGzMwMMwYGLsADMDDNwCGzMzAAD",
+  "consumables": {
+    "flask": "flask_of_the_magisters_2",
+    "food": "silvermoon_parade",
+    "potion": "potion_of_recklessness_2",
+    "augmentation": "void_touched",
+    "temporary_enchant": "main_hand:thalassian_phoenix_oil_2"
+  },
+  "gear": [
+    {"slot":"head","name":"Calamitous Echo's Magmashapers","from":"Catalyst from Temple of Sethraliss","item":271501,"bonus":[12854],"original":239035,"gems":[240983],"enchant":243981},
+    {"slot":"neck","name":"Aqirbane Reliquary","from":"Ula'tek","item":268265,"bonus":[13848,13987],"gems":[240898]},
+    {"slot":"shoulder","name":"Calamitous Echo's Sundered Peaks","from":"Catalyst from Coiled Altar","item":271499,"bonus":[13848],"original":268231,"enchant":243962},
+    {"slot":"back","name":"Silken Voodoo Drape","from":"Coiled Altar","item":268253,"bonus":[13848]},
+    {"slot":"chest","name":"Searing Caldera of Calamity","from":"Catalyst from Ula'tek","item":271504,"bonus":[13848,13846],"original":271876,"enchant":243977},
+    {"slot":"wrist","name":"Farstrider's Plated Bracers","from":"Crafted by Leatherworking","item":244584,"bonus":[13751,13836,12497,12666,8791,12384],"gems":[240898],"embellish":240167},
+    {"slot":"hands","name":"Calamitous Echo's Ebon Greathorns","from":"Catalyst from Ruby Life Pools","item":271502,"bonus":[12854],"original":193752},
+    {"slot":"waist","name":"Farstrider's Trophy Belt","from":"Crafted by Leatherworking","item":244581,"bonus":[13751,13836,12497,12666,8791,12384],"gems":[240898],"embellish":240167},
+    {"slot":"legs","name":"Earthen Pillars of Calamity","from":"Catalyst from Coiled Altar","item":271500,"bonus":[13848],"original":268237,"enchant":240133},
+    {"slot":"feet","name":"Ferocious Scaleboots","from":"Sszorak","item":268233,"bonus":[12854],"enchant":244008},
+    {"slot":"finger1","name":"Vile Alchemist's Band","from":"Vashnik","item":268249,"bonus":[12854],"gems":[240898],"enchant":243959},
+    {"slot":"finger2","name":"Charged Sandstone Band","from":"Temple of Sethraliss","item":158366,"bonus":[12854],"gems":[240898],"enchant":243959},
+    {"slot":"trinket1","name":"Wavecaller's Seastone","from":"Tidebound Grotto","item":270167,"bonus":[12584]},
+    {"slot":"trinket2","name":"Mindpiercer's Sigil","from":"Voidscar Arena","item":250224,"bonus":[12854]},
+    {"slot":"main_hand","name":"Jan'thrazet, the Soul Fang","from":"Ula'tek","item":271092,"bonus":[13848],"enchant":244031},
+    {"slot":"off_hand","name":"Spine of the Hissing Abyss","from":"Entombed Sentinels","item":268197,"bonus":[12854]}
+  ]
+}
