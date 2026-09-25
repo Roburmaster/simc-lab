@@ -92,11 +92,11 @@ export function weaponUI({api,notice,updateCount}){
     if(row.behind<=0)return sets&&!c.set?'—<small>best without a set bonus</small>':'—';
     return `−${row.behind.toFixed(2)}${unit}${row.tied?'<small>within uncertainty</small>':''}`;
   }
-  function table(rows,candidates,tanky){
+  function table(rows,candidates,tanky,support){
     const sets=rows.some(r=>candidates.get(r.key)?.set);
-    return `<table class="result-table weapon-table"><thead><tr><th>#</th><th>Item</th><th>${tanky?'Score':'DPS'}</th><th>Behind best</th><th>Tier</th></tr></thead><tbody>${rows.map(row=>{
+    return `<table class="result-table weapon-table"><thead><tr><th>#</th><th>Item</th><th>${tanky?'Score':support?'Raid DPS':'DPS'}</th><th>Behind best</th><th>Tier</th></tr></thead><tbody>${rows.map(row=>{
       const c=candidates.get(row.key);if(!c)return '';
-      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${c.itemLevel?` · item level ${c.itemLevel}${c.levelLabel?` (${esc(c.levelLabel)})`:''}`:''}${row.screened?' · screening only':''}${c.set?`<br>◆ ${esc(c.set.name)} ${c.set.pieces}-set with ${esc(c.set.with.join(', '))}`:''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}</small>`}</td><td>${gapCell(row,c,tanky,sets)}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
+      return `<tr class="${row.rank===1?'winner':''}"><td class="weapon-rank">${row.rank}</td><td>${itemLink(c.itemId,c.name,c.value)}<small>${esc(data.kinds[c.kind]||c.kind)} · ${esc(c.sources.join(' · '))}${c.craftedStat?` · ${esc(c.craftedStat)}`:''}${c.itemLevel?` · item level ${c.itemLevel}${c.levelLabel?` (${esc(c.levelLabel)})`:''}`:''}${row.screened?' · screening only':''}${c.set?`<br>◆ ${esc(c.set.name)} ${c.set.pieces}-set with ${esc(c.set.with.join(', '))}`:''}</small></td><td>${tanky?`${signed(row.score)}<small>DPS ${signed(row.dpsGain)} % · survival ${signed(row.survival)} %</small>`:`${number(row.dps)}<small>${row.error95!==null?`± ${number(row.error95)}`:''}${support&&Number.isFinite(row.own)?` · own ${number(row.own)}`:''}</small>`}</td><td>${gapCell(row,c,tanky,sets)}</td><td><span class="${tierClass(row.tier)}">${row.tier}</span></td></tr>`;
     }).join('')}</tbody></table>`;
   }
   // Healers are scored, not simulated, so they get a section of their own rather than one per fight style.
@@ -158,13 +158,15 @@ export function weaponUI({api,notice,updateCount}){
         const stages=(job.stages||[]).filter(st=>st.spec===spec.key&&st.scenario===s);
         html+=`<details class="log-details weapon-spec" open><summary>${esc(spec.label)} <span class="pill">${rows.length} weapons</span></summary>`;
         const base=stages.find(st=>st.stage===2&&st.baseline)?.baseline||stages.find(st=>st.baseline)?.baseline;
-        if(base)html+=`<p class="hint">Reference profile ${esc(spec.file.replace(/\.simc$/,''))} with its own weapon: ${number(base.dps)} DPS${spec.gear?` · gear at item level ${spec.gear.itemLevel} on average (${spec.gear.min}–${spec.gear.max})`:''}.</p>`;
+        const idle=stages.find(st=>st.idle&&st.status==='complete');
+        if(spec.support)html+=`<p class="hint">${esc(spec.specName)} does most of its damage through its allies, so it is ranked on the whole raid's damage — SimulationCraft's simplified allies, buffed by it.${idle?` Without its buffs the raid does ${number(idle.idle)} DPS; this character adds ${number(idle.share)}${Number.isFinite(idle.own)?`, ${number(idle.own)} of it its own`:''}, and the gaps below are percent of that.`:' Its share could not be measured, so the gaps below are percent of the whole raid.'}</p>`;
+        if(base)html+=`<p class="hint">Reference profile ${esc(spec.file.replace(/\.simc$/,''))} with its own weapon: ${number(base.dps)} ${spec.support?'raid ':''}DPS${spec.gear?` · gear at item level ${spec.gear.itemLevel} on average (${spec.gear.min}–${spec.gear.max})`:''}.</p>`;
         if(spec.stale)html+=`<p class="notice">${esc(spec.season)} profile: SimulationCraft has not rebuilt this specialization for the current season, so it is ranking current weapons on last season's character. The order within this list holds; do not read it next to the others.</p>`;
         if(spec.ours)html+=`<p class="hint">SimulationCraft has no profile for this specialization this season, so this character is SimC Lab's own${spec.provenance?`, built from ${esc(spec.provenance.name)}'s best in slot for patch ${esc(spec.provenance.patch)} (read ${esc(spec.provenance.readAt)})`:''}. Item levels, enchant ranks and the crafting cap come from the pinned game data. It is dropped as soon as SimulationCraft ships its own.</p>`;
         if(spec.boss?.measured)html+=`<p class="hint">Tank boss calibrated to ${number(spec.boss.health)} health: ${spec.boss.measured.sustained.toFixed(1)}% health per second, tank-busters of ${spec.boss.measured.buster.toFixed(0)}%, and the reference gear died in ${spec.boss.measured.deaths.toFixed(0)}% of calibration fights.${spec.boss.measured.reached?'':' The death target was not reached, so survival differences may be muted.'}</p>`;
-        for(const st of stages)if(st.status==='failed')html+=`<p class="notice">${st.stage===1?'Screening':'Final round'} failed: ${esc(st.error)}</p>`;
-        html+=hands.map(hand=>`${hands.length>1?`<h4 class="upgrade-heading">${esc(hand.name)} · ${hand.rows.length} weapons</h4>`:''}${table(hand.rows,candidates,tanky)}`).join('');
-        html+=`<p class="result-note">${stages.filter(st=>st.stem).map(st=>`${st.stage===1?'Screening':'Final round'} (${st.count}): <a href="/reports/${job.id}/${st.stem}.html" download>HTML</a> <a href="/reports/${job.id}/${st.stem}.json" download>JSON</a> <a href="/reports/${job.id}/${st.stem}.simc" download>Input</a>`).join(' · ')}</p></details>`;
+        for(const st of stages)if(st.status==='failed')html+=`<p class="notice">${st.stage===1?'Screening':st.idle?'Measuring its share of the raid':'Final round'} failed: ${esc(st.error)}</p>`;
+        html+=hands.map(hand=>`${hands.length>1?`<h4 class="upgrade-heading">${esc(hand.name)} · ${hand.rows.length} weapons</h4>`:''}${table(hand.rows,candidates,tanky,spec.support)}`).join('');
+        html+=`<p class="result-note">${stages.filter(st=>st.stem).map(st=>`${st.stage===1?'Screening':st.idle?'Raid without its buffs':'Final round'} (${st.count}): <a href="/reports/${job.id}/${st.stem}.html" download>HTML</a> <a href="/reports/${job.id}/${st.stem}.json" download>JSON</a> <a href="/reports/${job.id}/${st.stem}.simc" download>Input</a>`).join(' · ')}</p></details>`;
       }
       html+='</section>';
     }
