@@ -12,6 +12,7 @@ import {readUpgradeState} from './lib/crests.mjs';
 import {presets as tankPresets,isTank} from './lib/tank.mjs';
 import {loadReferenceSpecs,publicSpec,clearReferenceCache,craftedItemLevel,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
 import {tierListPage} from './lib/tierpage.mjs';
+import {upgradeReportPage} from './lib/upgradepage.mjs';
 import {healerWeights,contents as healerContents} from './lib/healers.mjs';
 import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from './lib/engine.mjs';
 import * as engine from './lib/engine.mjs';
@@ -19,6 +20,7 @@ import {upstreamDir,currentProfileDir} from './lib/paths.mjs';
 import {Updater} from './lib/updater.mjs';
 import {WowAddon} from './lib/wowaddon.mjs';
 import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
+import {importArmory,isArmoryProfile} from './lib/armory.mjs';
 const port=Number(process.env.PORT || 8642);
 const pkg=JSON.parse(await fs.readFile(new URL('./package.json',import.meta.url),'utf8'));
 const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP};const token=randomBytes(32).toString('hex');
@@ -38,10 +40,11 @@ const wow=new WowAddon({installDir:engine.wowInstallDir,context:async()=>({track
 async function sendToWow(job,options){
   ready();if(!season)throw new Error('Season data is not loaded.');
   const request=JSON.parse(await fs.readFile(path.join(runsDir,job.id,'request.json'),'utf8'));
+  if(isArmoryProfile(request.profile))throw new Error('Characters imported from the Armory are not sent to the WoW addon. Use /simc in game for that.');
   return wow.send(identity(request.profile,talentData),simEntry(job,request,{season,tracks:trackTable(season)}),options);
 }
 jobs.onFinished=async job=>{
-  if(!sendableModes[job.mode]||!['complete','partial'].includes(job.status))return;
+  if(!sendableModes[job.mode]||job.armory||!['complete','partial'].includes(job.status))return;
   const {settings}=await wow.loadStore();if(!settings.autoSend)return;
   try{await sendToWow(job,{auto:true});}catch(e){wow.last={id:job.id,auto:true,time:new Date().toISOString(),error:e.message};}
 };
@@ -91,10 +94,11 @@ const server=http.createServer(async(req,res)=>{
       const slot=url.searchParams.get('slot'),info={class:url.searchParams.get('class'),spec:url.searchParams.get('spec'),level:url.searchParams.get('level')??90};if(!slotTypes[slot])return json(res,400,{error:'Select an equipment slot.'});
       const q=(url.searchParams.get('q')||'').toLowerCase();const result=catalog.currentItems.filter(i=>fitsSlot(i,slot,info)&&(i.name.toLowerCase().includes(q)||String(i.id)===q)).slice(0,100).map(i=>({id:i.id,name:i.name,itemLevel:i.itemLevel,expansion:i.expansion}));return json(res,200,result);
     }
+    if(req.method==='POST'&&route==='/api/armory'){if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const {region,realm,name,url:link}=await body(req);return json(res,200,await importArmory({region,realm,name,url:link},{executable:engine.executable}));}
     if(req.method==='POST'&&route==='/api/import'){
       const text=(await body(req)).profile;const p=parseProfile(text);p.upgradeState=readUpgradeState(text);
       for(const item of Object.values(p.gear)){item.item=catalog.items.get(item.id)||null;item.enchants=catalog.forItem(item.id,p.info.class);}
-      p.expansion=catalog.expansion;p.isTank=isTank(p.info);
+      p.expansion=catalog.expansion;p.isTank=isTank(p.info);p.armory=isArmoryProfile(text);
       p.alternatives=p.alternatives.filter(v=>{try{catalog.validateChanges(p,parseProfile(v.text,{override:true}));return true;}catch{return false;}});
       p.alternatives=expandWeaponAlternatives(p,catalog);
       p.gems=catalog.gems;
@@ -122,6 +126,18 @@ const server=http.createServer(async(req,res)=>{
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
       return res.end(html);
     }
+    // The Upgrade Finder's report page, built like the tier list: from the finished job, with no script of its own.
+    const upgradeReport=route.match(/^\/upgrade-report\/([\da-f-]{36})\.html$/);
+    if(req.method==='GET'&&upgradeReport){
+      const job=jobs.jobs.get(upgradeReport[1]);
+      if(!job?.upgrade)return json(res,404,{error:'No Upgrade Finder job with that id.'});
+      const request=JSON.parse(await fs.readFile(path.join(runsDir,job.id,'request.json'),'utf8'));
+      let info={},equipped={};try{const p=parseProfile(request.profile);info=p.info;for(const [slot,g] of Object.entries(p.gear))if(g.id)equipped[slot]={id:g.id,value:g.value,name:catalog?.items.get(g.id)?.name};}catch{}
+      const html=upgradeReportPage(jobs.public(job),{info,equipped,armory:isArmoryProfile(request.profile)});
+      const filename=`upgrade-report-${String(info.name||job.name).normalize('NFKD').replace(/[^A-Za-z0-9-]+/g,'_')}-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
+      return res.end(html);
+    }
     const report=route.match(/^\/reports\/([\da-f-]{36})\/(\d{3}\.(?:html|json|simc)|request\.json)$/);
     if(req.method==='GET'&&report){
       const data=await fs.readFile(path.join(runsDir,report[1],report[2]));
@@ -129,7 +145,7 @@ const server=http.createServer(async(req,res)=>{
       // Reports are generated by SimC. Serve downloads so their scripts never share this app's origin.
       res.writeHead(200,{'Content-Type':ext==='.json'?'application/json':'application/octet-stream','Content-Disposition':`attachment; filename="${report[2]}"`});return res.end(data);
     }
-    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/style.css':'style.css'};
+    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css'};
     if(req.method==='GET'&&assets[route]){const file=assets[route];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(await fs.readFile(path.join(root,'public',file)));}
     json(res,404,{error:'Not found.'});
   }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}

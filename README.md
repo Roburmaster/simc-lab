@@ -10,12 +10,14 @@ For development, run `npm run install-engine` once and then `npm start` (http://
 
 ## Using the app
 
-1. Type /simc in WoW and paste the complete addon export.
+1. Type /simc in WoW and paste the complete addon export, or open **Import from the Armory** and enter region, realm and name (a worldofwarcraft.com, Raider.IO or Warcraft Logs character link works too).
 2. Click Import character.
 3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, or Talent Search.
 4. Set fight style, duration, target count, iterations and target error, then run the simulation.
 
 Weapon Lab is the exception: it ranks weapons for every specialization on SimulationCraft's own reference characters, so it runs without an import.
+
+**Armory imports.** The installed SimC engine downloads the character through its own Blizzard API access in one short run, and the app rewrites the result into the addon export's shape: gems, enchants and crafted stats by ID (read from the report's item links, since SimC's profile writer turns an Armory character's gems into stat strings), and the Armory's item stats kept, as SimC uses them for catalyzed items. The Armory shows the gear from the character's last logout and has no bags, Great Vault or crests, so Crest Planner skips its items. An Armory character is marked as such and is never sent to the WoW addon, by hand or automatically: the game has its own, fresher copy.
 
 All application text is English. Profiles and results remain on your PC.
 
@@ -47,7 +49,7 @@ Candidates are filtered for your class and specialization: allowed classes, loot
 
 Results can be filtered by slot: pick Neck, Rings or Main hand and every item measured for that slot is listed — the upgrades, the ones that were no better, and the ones screening cut — so "why is this item not here?" has an answer on the page. The unfiltered lists are unchanged.
 
-Each scenario runs in two SimC profileset runs. Screening simulates every candidate with at most 2,000 iterations and a 0.5% target error. Candidates whose screened DPS could beat the current gear within the combined uncertainty then go to a final round with your iteration and target-error settings. The final round takes up to 24, 48 or 96 candidates, with a quota per slot. Results show the best upgrade per boss, dungeon or source, every measured upgrade, and screening results that were not simulated again. Screening-only numbers are labelled. A search is limited to 800 candidates. Some crafted pieces require the matching profession to equip, and the data does not say which ones.
+Each scenario runs in two SimC profileset runs. Screening simulates every candidate with at most 2,000 iterations and a 0.5% target error. Candidates whose screened DPS could beat the current gear within the combined uncertainty then go to a final round with your iteration and target-error settings. The final round takes up to 24, 48 or 96 candidates, with a quota per slot. Results show the best upgrade per boss, dungeon or source, every measured upgrade, and screening results that were not simulated again. Screening-only numbers are labelled. A finished search also has its own **upgrade report** page: the character, the gear you wear slot by slot with the best upgrade for each, the best item per boss and dungeon, every final-round upgrade and the embellishment pairs. Like the weapon tier list it has no script of its own, so it can be opened from the app or downloaded as one HTML file and sent on. A search is limited to 800 candidates. Some crafted pieces require the matching profession to equip, and the data does not say which ones.
 
 ## Crest Planner
 
@@ -229,7 +231,7 @@ SimulationCraft source and licenses: https://github.com/simulationcraft/simc (lo
 Healer stat weights: QE Live, https://questionablyepic.com/live ( https://github.com/Voulk/QuestionablyEpic ); the numbers only, entered by hand, see profiles/healers/weights.json.
 Public client-data metadata and talent connections: https://www.raidbots.com/developers . The exact cached build, generation date, content hash and file checksums are in data/upstream/metadata.json.
 
-This is an independent local app, not an official Raidbots or Blizzard product. It does not include Armory imports, cloud workers, a full gear-set optimizer that combines several new items at once, or a guarantee that every new game effect is modeled perfectly by SimC.
+This is an independent local app, not an official Raidbots or Blizzard product. It does not include cloud workers, a full gear-set optimizer that combines several new items at once, or a guarantee that every new game effect is modeled perfectly by SimC.
 
 ## Raid buffs and consumables
 

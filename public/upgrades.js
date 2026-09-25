@@ -125,6 +125,7 @@ export function upgradeUI({api,notice,updateCount}){
       if(screened.length)html+=`<details class="log-details"${slotFilter==='all'?'':' open'}><summary>Screening results not simulated again (${screened.length})</summary>${table(screened.sort((a,b)=>b.rank-a.rank))}</details>`;
       html+=`<p class="result-note">${stages.filter(st=>st.stem).map(st=>`${stageName(st.stage)} (${st.count}): <a href="/reports/${job.id}/${st.stem}.html" download>HTML</a> <a href="/reports/${job.id}/${st.stem}.json" download>JSON</a> <a href="/reports/${job.id}/${st.stem}.simc" download>Input</a>`).join(' · ')}</p></section>`;
     }
+    if(['complete','partial'].includes(job.status)&&job.results.some(r=>r.stage===2&&r.status==='complete'))html=`<p class="tier-page-links"><a class="button small secondary" href="/upgrade-report/${job.id}.html" target="_blank" rel="noopener">Open the upgrade report ↗</a><a class="button small secondary" href="/upgrade-report/${job.id}.html?download" download>Download it</a><span class="hint">Your gear slot by slot, the best item per boss and dungeon, and every measured upgrade on one page, ready to keep or send on.</span></p>`+html;
     return `<div id="upgrade-results">${html}</div>`;
   }
   // The best embellished upgrades worn two at a time. Each pair is one simulation against the current gear.

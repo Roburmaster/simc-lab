@@ -107,3 +107,4 @@
 .crest-step{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--amber);color:#10131b;font-weight:700;font-size:12px}
 .crest-plan-box{margin-bottom:14px}
 @media (max-width:700px){.crest-plan li{grid-template-columns:auto 1fr}.crest-plan li>span:nth-child(3),.crest-plan li>b{grid-column:2}.crest-plan b{text-align:left}}
+.armory-import{margin-bottom:16px;border:1px solid var(--line);border-radius:7px;padding:12px 14px;background:#141a25}.armory-row{display:grid;grid-template-columns:90px 1fr 1fr auto;gap:10px;align-items:end;margin-top:14px}.armory-import .hint{margin:10px 0 0}.character .pill+.pill{margin-left:8px}@media(max-width:720px){.armory-row{grid-template-columns:1fr 1fr}}
