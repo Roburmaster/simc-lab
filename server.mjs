@@ -7,7 +7,7 @@ import path from 'node:path';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {parseProfile} from './lib/profile.mjs';
 import {loadCatalog} from './lib/catalog.mjs';
-import {loadSeason,publicSources} from './lib/upgrades.mjs';
+import {loadSeason,publicSources,upgradeSteps} from './lib/upgrades.mjs';
 import {readUpgradeState} from './lib/crests.mjs';
 import {presets as tankPresets,isTank} from './lib/tank.mjs';
 import {loadReferenceSpecs,publicSpec,clearReferenceCache,craftedItemLevel,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
@@ -102,10 +102,10 @@ const server=http.createServer(async(req,res)=>{
       return json(res,200,p);
     }
     if(req.method==='POST'&&route==='/api/preview'){
-      const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists};
+      const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists,embellished:plan.upgrade.candidates.filter(c=>c.embellishment).length,blocked:plan.upgrade.blocked,limitsUsed:plan.upgrade.limitsUsed,steps:upgradeSteps(plan.upgrade,plan.scenarios.length)};
       const crests=plan.crests&&{affordable:plan.crests.affordable,candidates:plan.crests.candidates.length,items:plan.crests.items,budget:plan.crests.budget,state:plan.crests.state};
       const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,healers:plan.weapons.specs.filter(s=>s.healer).length,craftedStats:plan.weapons.craftedStats.length,sources:plan.weapons.sources,levels:plan.weapons.levels,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
-      return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?2*plan.scenarios.length:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
+      return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
     if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs());
