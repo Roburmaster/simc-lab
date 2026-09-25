@@ -1,5 +1,5 @@
 -- The gear farm where the loot is: beside the Encounter Journal for the instance or boss on display, and as a
--- short notice on entering a dungeon or raid that has something to farm.
+-- notice on entering a dungeon or raid that has something to farm, both grouped by the boss that drops it.
 local _, ns = ...
 local UI = ns.UI
 
@@ -24,9 +24,17 @@ function ns.InstanceFarm(instanceId, encounterId)
   for _, g in ipairs(groups) do
     for _, item in ipairs(g.items) do
       local key = ns.ItemKey(item.result)
-      if not seen[key] then
+      local bossId, boss
+      if g.source.kind == "mplus" then
+        bossId, boss = ns.DungeonBoss(instanceId, item.result.itemId)
+      else
+        bossId, boss = g.source.encounterId, g.source.name
+      end
+      -- With the boss known, a dungeon item belongs to that boss only instead of every boss of the dungeon.
+      if not seen[key] and not (encounterId and bossId and bossId ~= encounterId) then
         seen[key] = true
         item.group = g
+        item.bossId, item.boss = bossId, boss
         items[#items + 1] = item
       end
     end
@@ -38,28 +46,60 @@ function ns.InstanceFarm(instanceId, encounterId)
   return items, scenario, sim
 end
 
-local function rowsFor(items, scenario, specId, characterKey)
-  local rows = {}
+-- The boss is the heading, so the row keeps to slot and track, which fit beside the value.
+local function itemRow(item, scenario, specId, characterKey)
+  local r = item.result
+  local detail = {}
+  if r.slot then detail[#detail + 1] = ns.SLOT_NAMES[r.slot] or r.slot end
+  if ns.TrackLabel(r) then detail[#detail + 1] = ns.TrackLabel(r) end
+  return UI.ResultRow(r, scenario, specId, {
+    checkable = true,
+    checked = item.done,
+    dim = item.done,
+    detail = ns.Plain(table.concat(detail, "  ·  ")),
+    valueDetail = item.owned and "owned" or "",
+    onCheck = function() ns.ToggleDone(characterKey, r) end,
+  })
+end
+
+-- Items under a heading per boss, the boss with the best missing item first. A single boss on display in the
+-- journal needs no heading.
+local function byBoss(items, single)
+  if single then return { { items = items } } end
+  local bosses, byKey = {}, {}
   for _, item in ipairs(items) do
-    local r = item.result
-    local detail = {}
-    if r.slot then detail[#detail + 1] = ns.SLOT_NAMES[r.slot] or r.slot end
-    if ns.TrackLabel(r) then detail[#detail + 1] = ns.TrackLabel(r) end
-    if item.group and item.group.source.kind == "raid" then detail[#detail + 1] = item.group.title end
-    rows[#rows + 1] = UI.ResultRow(r, scenario, specId, {
-      checkable = true,
-      checked = item.done,
-      dim = item.done,
-      detail = ns.Plain(table.concat(detail, "  ·  ")),
-      valueDetail = item.owned and "owned" or "",
-      onCheck = function() ns.ToggleDone(characterKey, r) end,
-    })
+    local key = item.bossId or item.boss or (item.group and item.group.title) or "?"
+    local b = byKey[key]
+    if not b then
+      b = { title = item.boss or (item.group and item.group.title) or "Other drops", items = {}, missing = 0 }
+      byKey[key] = b
+      bosses[#bosses + 1] = b
+    end
+    b.items[#b.items + 1] = item
+    if not item.done then b.missing = b.missing + 1 end
+  end
+  return bosses
+end
+
+local function rowsFor(items, scenario, specId, characterKey, single)
+  local rows = {}
+  for _, boss in ipairs(byBoss(items, single)) do
+    if boss.title then
+      rows[#rows + 1] = {
+        header = true,
+        title = ns.Plain(boss.title),
+        value = boss.missing > 0 and UI.Paint(boss.missing .. " missing", UI.colors.accent) or UI.Paint("done", UI.colors.ok),
+      }
+    end
+    for _, item in ipairs(boss.items) do
+      rows[#rows + 1] = itemRow(item, scenario, specId, characterKey)
+    end
   end
   return rows
 end
 
-local function farmPanel(name, parent, rows)
-  local p = UI.Panel(name, parent, 300, 72 + rows * 30)
+local function farmPanel(name, parent, rows, onClose)
+  local p = UI.Panel(name, parent, 320, 72 + rows * 30)
   p.title = UI.OneLine(UI.Text(p, "GameFontNormal"))
   p.title:SetPoint("TOPLEFT", 10, -10)
   p.title:SetPoint("TOPRIGHT", -28, -10)
@@ -70,18 +110,18 @@ local function farmPanel(name, parent, rows)
   p.list:SetPoint("TOPLEFT", 6, -46)
   p.list:SetPoint("TOPRIGHT", -6, -46)
   p.list.position:SetPoint("BOTTOMRIGHT", -10, 8)
-  UI.Close(p)
+  UI.Close(p, onClose)
   return p
 end
 
-local function fill(panel, items, scenario, sim, heading)
+local function fill(panel, items, scenario, sim, heading, single)
   local _, character, specId = ns.CurrentSpec()
   local missing = 0
   for _, item in ipairs(items) do if not item.done then missing = missing + 1 end end
   panel.title:SetText(UI.Paint("SimC Lab farm: ", UI.colors.accent) .. ns.Plain(heading or ""))
   local stale = ns.IsStale(sim, character)
   panel.subtitle:SetText(UI.Paint(string.format("%d upgrade%s, %d still missing", #items, #items == 1 and "" or "s", missing), UI.colors.muted) .. (stale and UI.Paint("  ·  stale sim", UI.colors.stale) or ""))
-  local rows = rowsFor(items, scenario, specId, character.key)
+  local rows = rowsFor(items, scenario, specId, character.key, single)
   panel.list:SetItems(rows)
   local shown = math.min(#rows, panel.list.visible)
   panel:SetHeight(58 + math.max(shown, 1) * 30 + (#rows > panel.list.visible and 16 or 0))
@@ -104,7 +144,7 @@ local function updateJournal()
   local heading
   if EJ_GetInstanceInfo then heading = EJ_GetInstanceInfo(shownInstance) end
   if shownEncounter and EJ_GetEncounterInfo then heading = EJ_GetEncounterInfo(shownEncounter) or heading end
-  fill(journal, items, scenario, sim, heading)
+  fill(journal, items, scenario, sim, heading, shownEncounter ~= nil)
   journal:Show()
 end
 
@@ -153,31 +193,46 @@ function ns.CheckEntrance()
   if #missing == 0 then return end
   announced[instanceId] = true
   if not entrance then
-    entrance = farmPanel("SimCLabEntrance", UIParent, 6)
+    -- The notice stays until it is closed or the instance is left; combat only tucks it away.
+    entrance = farmPanel("SimCLabEntrance", UIParent, 8, function()
+      entrance.instanceId = nil
+      entrance:Hide()
+    end)
     entrance:SetPoint("TOP", UIParent, "TOP", 0, -140)
     entrance:SetFrameStrata("MEDIUM")
     UI.Movable(entrance)
   end
   local name = GetInstanceInfo()
   fill(entrance, missing, scenario, sim, name)
-  entrance:Show()
-  entrance.expires = GetTime() + 45
-  C_Timer.After(45.5, function()
-    if entrance and entrance.expires and GetTime() >= entrance.expires then entrance:Hide() end
-  end)
+  entrance.instanceId = instanceId
+  if not (InCombatLockdown and InCombatLockdown()) then entrance:Show() end
+end
+
+local function leftInstance()
+  if entrance and entrance.instanceId and journalInstanceHere() ~= entrance.instanceId then
+    entrance.instanceId = nil
+    entrance:Hide()
+  end
 end
 
 ns.On("event", function(event, arg1)
   if event == "ADDON_LOADED" and arg1 == "Blizzard_EncounterJournal" then hookJournal() end
   if event == "PLAYER_LOGIN" and EncounterJournal then hookJournal() end
   if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
-    C_Timer.After(2, ns.CheckEntrance)
+    C_Timer.After(2, function()
+      leftInstance()
+      ns.CheckEntrance()
+    end)
   end
   if event == "PLAYER_REGEN_DISABLED" and entrance then entrance:Hide() end
+  if event == "PLAYER_REGEN_ENABLED" and entrance and entrance.instanceId then entrance:Show() end
 end)
 ns.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 ns.eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 ns.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+ns.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 ns.On("checklist", updateJournal)
 ns.On("gear", updateJournal)
 ns.On("data", updateJournal)
+ns.On("data", function() C_Timer.After(1, ns.WarmBosses) end)
+ns.On("player", function() C_Timer.After(5, ns.WarmBosses) end)

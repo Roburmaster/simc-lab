@@ -197,6 +197,15 @@ C_Map = { GetBestMapForUnit = function() return __mock.instance.map end }
 function EJ_GetInstanceForMap() return __mock.instance.journal end
 function EJ_GetInstanceInfo(id) return "Instance " .. tostring(id) end
 function EJ_GetEncounterInfo(id) return "Encounter " .. tostring(id) end
+-- Journal loot by instance: { [instanceId] = { { itemID = …, encounterID = … } } }.
+__mock.ejLoot = {}
+__mock.ej = { instance = nil, encounter = nil, classId = 0, specId = 0, scans = 0 }
+function EJ_SelectInstance(id) __mock.ej.instance, __mock.ej.encounter = id, nil __mock.ej.scans = __mock.ej.scans + 1 end
+function EJ_SelectEncounter(id) __mock.ej.encounter = id end
+function EJ_GetLootFilter() return __mock.ej.classId, __mock.ej.specId end
+function EJ_SetLootFilter(classId, specId) __mock.ej.classId, __mock.ej.specId = classId, specId end
+function EJ_GetNumLoot() return #(__mock.ejLoot[__mock.ej.instance] or {}) end
+C_EncounterJournal = { GetLootInfoByIndex = function(i) return (__mock.ejLoot[__mock.ej.instance] or {})[i] end }
 function GetInstanceInfo() return __mock.instance.name, __mock.instance.kind end
 function InCombatLockdown() return false end
 function GetBuildInfo() return "12.1.0", "69875", "Sep 18 2026", 120100 end

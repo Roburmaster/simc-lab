@@ -330,10 +330,84 @@ function ns.TrackLabel(result)
   return nil
 end
 
-function ns.SourceShort(s)
+-- Mythic+ loot comes out of the end chest, but the Encounter Journal still lists it under the boss that drops it
+-- outside a keystone. SimC's data only knows the dungeon, so the boss is read from the journal, once per dungeon.
+local bossesByInstance, bossRetryAt = {}, {}
+
+local function scanBosses(instanceId)
+  if not (EJ_SelectInstance and EJ_GetNumLoot and C_EncounterJournal and C_EncounterJournal.GetLootInfoByIndex) then return nil end
+  -- The open journal owns the selection; changing it under the player would swap the page they are reading.
+  if EncounterJournal and EncounterJournal:IsShown() then return nil end
+  local prevClass, prevSpec
+  if EJ_GetLootFilter then prevClass, prevSpec = EJ_GetLootFilter() end
+  local prevSlot = C_EncounterJournal.GetSlotFilter and C_EncounterJournal.GetSlotFilter()
+  local _, _, classId = UnitClass("player")
+  local specId = specInfo()
+  local map, found = {}, false
+  local ok = pcall(function()
+    EJ_SelectInstance(instanceId)
+    if EJ_SetLootFilter and classId then EJ_SetLootFilter(classId, specId or 0) end
+    if C_EncounterJournal.SetSlotFilter and Enum and Enum.ItemSlotFilterType then C_EncounterJournal.SetSlotFilter(Enum.ItemSlotFilterType.NoFilter) end
+    for i = 1, EJ_GetNumLoot() or 0 do
+      local info = C_EncounterJournal.GetLootInfoByIndex(i)
+      if info and type(info.itemID) == "number" and type(info.encounterID) == "number" then
+        map[info.itemID] = info.encounterID
+        found = true
+      end
+    end
+  end)
+  pcall(function()
+    if EJ_SetLootFilter and prevClass then EJ_SetLootFilter(prevClass, prevSpec or 0) end
+    if C_EncounterJournal.SetSlotFilter and prevSlot then C_EncounterJournal.SetSlotFilter(prevSlot) end
+    if EncounterJournal and EncounterJournal.instanceID then EJ_SelectInstance(EncounterJournal.instanceID) end
+    if EncounterJournal and EncounterJournal.encounterID and EJ_SelectEncounter then EJ_SelectEncounter(EncounterJournal.encounterID) end
+  end)
+  -- An empty list means the journal had no data yet; try again next time rather than remember nothing.
+  if not ok or not found then return nil end
+  return map
+end
+
+-- The journal encounter ID and name of the boss that drops this item in a Mythic+ dungeon, when known.
+function ns.DungeonBoss(instanceId, itemId)
+  if not instanceId or not itemId then return nil end
+  local map = bossesByInstance[instanceId]
+  if not map then
+    -- A dungeon whose loot was not in yet is left alone for a while, so tooltips do not rescan on every hover.
+    if (bossRetryAt[instanceId] or 0) > GetTime() then return nil end
+    map = scanBosses(instanceId)
+    if not map then
+      bossRetryAt[instanceId] = GetTime() + 10
+      return nil
+    end
+    bossesByInstance[instanceId] = map
+  end
+  local encounterId = map[itemId]
+  if not encounterId then return nil end
+  local name = EJ_GetEncounterInfo and EJ_GetEncounterInfo(encounterId)
+  return encounterId, type(name) == "string" and name or nil
+end
+
+-- Reads the bosses of every dungeon in the farm up front, so the open journal can show them from the cache.
+function ns.WarmBosses()
+  local spec = ns.CurrentSpec and ns.CurrentSpec()
+  local sim = spec and ns.FarmSim(spec)
+  if not sim then return end
+  for _, scenario in ipairs(sim.scenarios) do
+    for _, r in ipairs(scenario.results) do
+      for _, s in ipairs(r.sources or {}) do
+        if s.kind == "mplus" and s.instanceId and not bossesByInstance[s.instanceId] then ns.DungeonBoss(s.instanceId, r.itemId) end
+      end
+    end
+  end
+end
+
+function ns.SourceShort(s, itemId)
   if not s then return nil end
   if s.kind == "raid" then return (s.difficulty and (s.difficulty .. " ") or "") .. (s.name or "Raid") end
-  if s.kind == "mplus" then return (s.name or "Mythic+") end
+  if s.kind == "mplus" then
+    local _, boss = ns.DungeonBoss(s.instanceId, itemId)
+    return (s.name or "Mythic+") .. (boss and (": " .. boss) or "")
+  end
   if s.kind == "vault" then return "Vault " .. (s.row or "") .. (s.name and (" (" .. s.name .. ")") or "") end
   if s.kind == "delves" then return "Delves" end
   if s.kind == "crafted" then return "Crafted" .. (s.name and (" (" .. s.name .. ")") or "") end
