@@ -8,6 +8,7 @@ import {tankUI,signed} from '/tank.js';
 import {engineUI} from '/engine.js';
 import {activityUI,describeProgress,duration} from '/activity.js';
 import {wowUI} from '/wow.js';
+import {armoryUI} from '/armory.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -25,7 +26,7 @@ async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggl
   $('.import-panel').hidden=value==='weapons';tank.forWeapons(value==='weapons');
   if(value==='history')await loadHistory();else if(value==='wow')await wow.refresh();else updateCount();}
 $$('.nav').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode).catch(e=>notice(e.message))));
-async function importProfile(){notice('');const text=$('#profile').value;const parsed=await api('/api/import',{profile:text});profile=parsed;importedText=text;selections={};safeStore('simc-lab-profile',text);$('#character').hidden=false;$('#character').innerHTML=`<span class="character-icon">◈</span><div><strong>${esc(parsed.info.name)}</strong><p>${esc(parsed.info.race)} · ${esc(parsed.info.spec)} ${esc(parsed.info.class)} · Level ${esc(parsed.info.level)}</p></div><span class="pill">${Object.keys(parsed.gear).length} gear slots</span>`;$('#import-status').textContent=`Imported · ${Object.keys(parsed.gear).length} gear slots · ready to simulate`;renderEnchants();renderImportedChoices();features.render(parsed);crests.show(parsed);tank.show(parsed);updateCount();return parsed;}
+async function importProfile(){notice('');const text=$('#profile').value;const parsed=await api('/api/import',{profile:text});profile=parsed;importedText=text;selections={};safeStore('simc-lab-profile',text);$('#character').hidden=false;$('#character').innerHTML=`<span class="character-icon">◈</span><div><strong>${esc(parsed.info.name)}</strong><p>${esc(parsed.info.race)} · ${esc(parsed.info.spec)} ${esc(parsed.info.class)} · Level ${esc(parsed.info.level)}</p></div>${parsed.armory?'<span class="pill" title="Imported from the Armory. Not sent to the WoW addon.">Armory</span>':''}<span class="pill">${Object.keys(parsed.gear).length} gear slots</span>`;$('#import-status').textContent=`Imported · ${Object.keys(parsed.gear).length} gear slots · ready to simulate`;renderEnchants();renderImportedChoices();features.render(parsed);crests.show(parsed);tank.show(parsed);updateCount();return parsed;}
 $('#import').addEventListener('click',async()=>{try{$('#import').disabled=true;await importProfile();}catch(e){notice(e.message);}finally{$('#import').disabled=false;}});
 $('#profile').addEventListener('input',()=>{$('#import-status').textContent='The profile changed. Import it again before selecting enchants.';profile=null;selections={};$('#character').hidden=true;renderEnchants();updateCount();});
 $('#example').addEventListener('click',async()=>{try{$('#profile').value=(await api('/api/example')).text;await importProfile();$('#import-status').textContent='SimC example: MID2 Frost Mage. Replace it with your own /simc export.';}catch(e){notice(e.message);}});
@@ -124,6 +125,7 @@ const weapons=weaponUI({api,notice,updateCount});
 const engineView=engineUI({api,notice});
 const activity=activityUI({api,openJob:async id=>{if(mode==='history')await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});},onChange:()=>{if(mode==='history')loadHistory().catch(()=>{});}});
 const wow=wowUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});
+armoryUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});
 const tank=tankUI({updateCount});
 const environment=environmentUI({api,notice,addVariant:v=>{if(variants.length===1&&!variants[0].text)variants=[];variants.push(v);renderVariants();updateCount();}});
 $('#enchant-slots').addEventListener('click',e=>{const slot=e.target.dataset.clearEnchants;if(slot){selections[slot]=[];renderEnchants();updateCount();}});

@@ -18,6 +18,9 @@ test('addon export: exact WoW version, saved talents, bag items and comments',()
   const p=parseProfile('# WoW 12.1.0.69814, TOC 120100\n'+example+'\n# Saved Loadout: AoE\n# talents=ABC123\n### Gear from Bags\n# Test Ring\n# finger1=,id=251136,enchant_id=8021\n');
   assert.deepEqual(p.version,{patch:'12.1.0',build:'69814'});assert.equal(p.alternatives.length,2);assert.equal(p.alternatives[0].name,'AoE');assert.equal(p.alternatives[1].slot,'finger1');
 });
+test('an export without a readable specialization is refused before SimC sees it',()=>{
+  assert.throws(()=>parseProfile(example.replace(/^spec=.*$/m,'spec=unknown')),/spec=unknown.*\/reload/);
+});
 test('file, network, output and multi-token directives cannot pass import',()=>{
   for(const line of ['input=private.simc','output=outside.txt','html=outside.html','armory=eu,x,y','mage=x output=outside.txt','race=tauren\tinput=secret.simc','mage="x" output=outside.txt','race="unterminated'])assert.throws(()=>parseProfile(example+'\n'+line));
   assert.throws(()=>parseProfile(example+'\nwarrior=x'));

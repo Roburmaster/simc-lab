@@ -76,7 +76,7 @@ export function wowUI({api,notice,importText}){
     catch(err){out.textContent=err.message;}finally{button.disabled=false;}
   });
   function sendButton(job){
-    if(!sendable[job.mode]||!['complete','partial'].includes(job.status))return '';
+    if(!sendable[job.mode]||job.armory||!['complete','partial'].includes(job.status))return '';
     return `<div class="wow-send"><button class="button small secondary" data-wow-send="${esc(job.id)}">Send to WoW</button><span class="wow-send-result hint"></span></div>`;
   }
 
