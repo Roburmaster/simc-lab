@@ -107,3 +107,67 @@ test('SimC progress lines give the running step a fraction',async()=>{
   assert.equal(jobFraction({status:'running',done:1,total:3,progress:{fraction:0.5}}),0.5);
   assert.equal(jobFraction({status:'queued',done:0,total:3}),0);
 });
+
+test('embellishments come from the crafting slots, current expansion only, at their best quality',async()=>{
+  const {embellishmentData,itemLimitsOf}=await import('../lib/upgrades.mjs');
+  const crafting={slots:{391:{reagentSlotId:391,name:'Add Embellishment',reagentIds:[1,2,3,4]},392:{reagentSlotId:392,name:'Infuse with Power',reagentIds:[5]}},reagents:[
+    {id:1,name:'Lining',expansion:11,craftingQuality:1,itemLimit:{category:512,quantity:2},craftingBonusIds:[8960,12384]},
+    {id:2,name:'Lining',expansion:11,craftingQuality:2,itemLimit:{category:512,quantity:2},craftingBonusIds:[8960,12384]},
+    {id:3,name:'Old patch',expansion:10,craftingQuality:3,itemLimit:{category:512,quantity:2},craftingBonusIds:[8960,9379]},
+    {id:4,name:'Keychain',expansion:11,craftingBonusIds:[12715]},{id:5,name:'Spark',expansion:11,craftingBonusIds:[1]}]};
+  const bonusText='  { 19326, 8960, 35,     512,       0,       0,       0,  0 },\n  { 26417, 12384, 23,  208649,       0,       0,       0,  0 },';
+  const {embellishments,limits}=embellishmentData(crafting,[{id:77,itemLimit:{category:512,quantity:2}}],bonusText,11);
+  assert.deepEqual(embellishments.map(e=>[e.id,e.name,e.slots]),[[2,'Lining',[391]]]);
+  assert.equal(limits.quantities.get(512),2);
+  assert.deepEqual([...itemLimitsOf(77,[8960],limits)],[512],'a born-embellished item counts once');
+  assert.deepEqual([...itemLimitsOf(5,[8790],limits)],[]);
+  assert.deepEqual(embellishmentData(null,[],bonusText,11).embellishments,[]);
+});
+
+const embSeason=()=>{
+  const limits={bonuses:new Map([[8960,512]]),items:new Map([[41,512]]),quantities:new Map([[512,2]])};
+  const craft={optionalCraftingSlots:[{id:391}]};
+  return {...season,itemLimits:limits,embellishments:[{id:2,name:'Lining',bonusIds:[8960,12384],category:512,slots:[391]}],entries:[
+    {item:{id:40,name:'Crafted bracers',itemClass:4,itemSubClass:4,inventoryType:9,profession:craft},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}},
+    {item:{id:42,name:'Crafted boots',itemClass:4,itemSubClass:4,inventoryType:8,profession:craft},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}},
+    {item:{id:41,name:'Born band',itemClass:4,itemSubClass:0,inventoryType:11},source:{kind:'crafted',group:-37,groupName:'Jewelcrafting'}}]};
+};
+for(const id of [40,41,42,50,51])items.set(id,{inventoryType:1,itemClass:4,name:'Item '+id});
+
+test('crafted pieces are tried with each embellishment, and nothing breaks the equip limit',()=>{
+  const data=embSeason(),request={crafted:{enabled:true,itemLevel:321,stats:8791}};
+  const free=buildCandidates(profile,request,data,catalog,71);
+  assert.ok(free.candidates.some(c=>c.line==='wrist=,id=40,bonus_id=8791,ilevel=321'));
+  const lined=free.candidates.find(c=>c.line==='wrist=,id=40,bonus_id=8791/8960/12384,ilevel=321');
+  assert.equal(lined.embellishment,'Lining');assert.deepEqual(lined.limits,[512]);assert.match(lined.sources[0].label,/Lining$/);
+  assert.ok(free.embellished);assert.equal(free.blocked,0);
+  assert.equal(buildCandidates(profile,{crafted:{...request.crafted,embellishments:[]}},data,catalog,71).candidates.filter(c=>c.embellishment).length,0,'an empty choice means plain only');
+  assert.throws(()=>buildCandidates(profile,{crafted:{...request.crafted,embellishments:[9]}},data,catalog,71),/unknown selection/);
+  // Two embellished items already worn: only the slots that hold one can take another.
+  const full={...profile,gear:{...profile.gear,wrist:gear('wrist',50,',bonus_id=8790/8960/12693'),finger2:gear('finger2',41)}};
+  const capped=buildCandidates(full,request,data,catalog,71);
+  assert.ok(capped.candidates.some(c=>c.slot==='wrist'&&c.embellishment),'replacing an embellished piece stays legal');
+  assert.ok(!capped.candidates.some(c=>c.slot==='feet'&&c.embellishment),'a third embellishment is never offered');
+  assert.ok(capped.candidates.some(c=>c.slot==='feet'&&!c.embellishment));
+  assert.ok(capped.candidates.some(c=>c.slot==='finger2'&&c.itemId===41)&&!capped.candidates.some(c=>c.slot==='finger1'&&c.itemId===41),'a born-embellished band only replaces an embellished ring');
+  assert.ok(capped.blocked>0);assert.deepEqual(capped.limitsUsed.map(h=>h.slot).sort(),['finger2','wrist']);
+});
+
+test('embellishment pairs are the best embellished upgrades that can be worn together',async()=>{
+  const {embellishmentPairs,profilesetLines:lines,upgradeSteps}=await import('../lib/upgrades.mjs');
+  const data=embSeason();
+  const one={...profile,gear:{...profile.gear,wrist:gear('wrist',50,',bonus_id=8790/8960/12693')}};
+  const {candidates}=buildCandidates(one,{crafted:{enabled:true,itemLevel:321,stats:8791}},data,catalog,71);
+  assert.equal(upgradeSteps({embellished:true},2),6);assert.equal(upgradeSteps({embellished:false},2),4);
+  const rows=candidates.map((c,i)=>({key:c.key,dps:1100-i}));
+  const pairs=embellishmentPairs(candidates,rows,{dps:1000},one,data,catalog);
+  assert.ok(pairs.length>0);
+  for(const p of pairs){
+    const slots=p.parts.map(c=>c.slot);
+    assert.ok(slots.includes('wrist'),'with one embellishment kept on the wrists, every pair must replace it: '+slots);
+    assert.equal(new Set(slots).size,2);
+  }
+  const text=lines(pairs.slice(0,1),one,catalog);
+  assert.equal(text.length,2);assert.match(text[0],/^profileset\."p001"=/);assert.match(text[1],/^profileset\."p001"\+=/);
+  assert.deepEqual(embellishmentPairs(candidates,rows.map(r=>({...r,dps:900})),{dps:1000},one,data,catalog),[],'nothing that lost is paired');
+});

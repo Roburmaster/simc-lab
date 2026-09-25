@@ -13,6 +13,12 @@ export function upgradeUI({api,notice,updateCount}){
   const trackPicker=(name,trackId,level)=>`<div class="two-col upgrade-track"><label>Upgrade track<select data-track="${name}">${trackOptions(trackId)}</select></label><label>Level<select data-level="${name}">${levelOptions(trackId,level)}</select></label></div>`;
   const upgradeOptions=(trackId,selected=0)=>{const t=data.tracks.find(x=>x.id===Number(trackId));return `<option value="0">As dropped</option>${t.levels.map(l=>`<option value="${l.level}" ${l.level===selected?'selected':''}>Upgraded to ${l.level}/${l.max} · item level ${l.itemLevel}</option>`).join('')}`;};
   const dropNote=trackId=>{const t=data.tracks.find(x=>x.id===Number(trackId));return `Boss n drops at ${t.name} n/${t.levels.length} (${t.levels.slice(0,3).map(l=>l.itemLevel).join(', ')}), trash at the first level. ${t.finalDrop?`The last bosses drop at item level ${t.finalDrop.itemLevel}.`:`The last bosses use ${t.name} 4/${t.levels.length} (${t.levels[3]?.itemLevel}); the data has no separate final-boss level for this difficulty.`}`;};
+  // Each crafted piece is also tried with every chosen embellishment it can take.
+  function embellishmentPicker(){
+    if(!data.embellishments?.length)return `<p class="hint">${data.hasCraftingData===false?'Embellishments need newer game data. Use Update SimC to download it.':'This season has no embellishments.'}</p>`;
+    const limit=data.embellishments.find(e=>e.limitName)?.limit;
+    return `<details><summary>Embellishments (${data.embellishments.length})</summary><p class="hint">Each piece is tried plain and with every embellishment below that it can take.${limit?` You can wear ${limit} embellished items. Pieces that would break the limit next to what you wear are left out, and the best embellished upgrades are then simulated in pairs.`:''}</p><div class="upgrade-group-actions"><button class="text-button" data-all="emb">All</button><button class="text-button" data-none="emb">None</button></div>${groupChecks('emb',data.embellishments)}</details>`;
+  }
   const groupChecks=(name,list)=>`<div class="upgrade-groups">${list.map(g=>`<label class="check"><input type="checkbox" data-group="${name}" value="${g.id}" checked>${esc(g.name)}</label>`).join('')}</div>`;
   function render(){
     const hero=(data.tracks.find(t=>t.name==='Hero')||data.tracks.at(-1)).id,myth=data.tracks.at(-1).id;
@@ -23,11 +29,11 @@ export function upgradeUI({api,notice,updateCount}){
       <section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="mplus" checked><strong>Mythic+</strong></label><p class="hint">${data.dungeons.length} dungeons in the current rotation, including reissued older dungeons.</p>${trackPicker('mplus',hero,1)}<details><summary>Dungeons</summary><div class="upgrade-group-actions"><button class="text-button" data-all="mplus">All</button><button class="text-button" data-none="mplus">None</button></div>${groupChecks('mplus',data.dungeons)}</details></section>
       <section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="vault"><strong>Great Vault</strong></label><p class="hint">Any boss or dungeon item from the full season loot tables, one track per vault row.</p>${[['raid','Raid row'],['mplus','Dungeon row'],['delves','World row']].filter(([row])=>row!=='delves'||data.delves).map(([row,label])=>`<div class="vault-row"><label class="check"><input type="checkbox" data-vault-row="${row}" checked>${label}</label>${trackPicker('vault-'+row,myth,1)}</div>`).join('')}</section>
       ${data.delves?`<section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="delves"><strong>Delves</strong></label><p class="hint">${esc(data.delves.name)} loot table.</p>${trackPicker('delves',hero,1)}</section>`:''}
-      ${data.crafted?`<section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="crafted"><strong>Crafted</strong></label><p class="hint">Epic profession gear. Embellishments are not included. Some pieces require the matching profession to equip.</p><div class="two-col"><label>Item level<input id="crafted-ilevel" type="number" min="1" max="1000" value="${heroTop}"></label><label>Secondary stats<select id="crafted-stats">${data.craftedStats.map(s=>`<option value="${s.bonusId}">${esc(s.name)}</option>`).join('')}</select></label></div></section>`:''}
+      ${data.crafted?`<section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="crafted"><strong>Crafted</strong></label><p class="hint">Epic profession gear. Some pieces require the matching profession to equip.</p><div class="two-col"><label>Item level<input id="crafted-ilevel" type="number" min="1" max="1000" value="${heroTop}"></label><label>Secondary stats<select id="crafted-stats">${data.craftedStats.map(s=>`<option value="${s.bonusId}">${esc(s.name)}</option>`).join('')}</select></label></div>${embellishmentPicker()}</section>`:''}
     </div>
     <details class="log-details upgrade-slots"><summary>Slots to search</summary><div class="upgrade-group-actions"><button class="text-button" data-all="slot">All</button><button class="text-button" data-none="slot">None</button></div><div class="upgrade-groups">${gearGroups.flatMap(([,slots])=>slots).map(s=>`<label class="check"><input type="checkbox" data-group="slot" value="${s}" checked>${esc(slotNames[s])}</label>`).join('')}</div></details>
     <div class="two-col upgrade-options"><label>Final round size<select id="upgrade-finalists">${data.limits.finalists.map(n=>`<option value="${n}" ${n===48?'selected':''}>${n} candidates</option>`).join('')}</select></label><div id="upgrade-count" class="hint">Import a character to count candidates.</div></div>
-    <p class="result-note">Screening runs every candidate with at most 2,000 iterations and a 0.5% target error. Candidates that could beat your gear within that uncertainty go to the final round with your simulation settings. Weapons are compared like for like with what you wield. Your enchant carries over, and existing gems carry over into sockets the new item already has. Vault sockets and embellishments are not added.</p>`;
+    <p class="result-note">Screening runs every candidate with at most 2,000 iterations and a 0.5% target error. Candidates that could beat your gear within that uncertainty go to the final round with your simulation settings. Weapons are compared like for like with what you wield. Your enchant carries over, and existing gems carry over into sockets the new item already has. Crafted pieces are tried with the embellishments you choose, within the equip limit. Vault sockets are not added.</p>`;
   }
   const checked=name=>$$(`[data-group="${name}"]:checked`).map(e=>Number(e.value)||e.value);
   const pick=name=>({track:Number($(`[data-track="${name}"]`).value),level:Number($(`[data-level="${name}"]`).value)});
@@ -39,7 +45,7 @@ export function upgradeUI({api,notice,updateCount}){
     result.mplus={enabled:on('mplus'),...pick('mplus'),dungeons:checked('mplus')};
     result.vault={enabled:on('vault')};for(const row of ['raid','mplus','delves'])if($(`[data-vault-row="${row}"]`))result.vault[row]={enabled:$(`[data-vault-row="${row}"]`).checked,...pick('vault-'+row)};
     if(data.delves)result.delves={enabled:on('delves'),...pick('delves')};
-    if(data.crafted)result.crafted={enabled:on('crafted'),itemLevel:Number($('#crafted-ilevel').value),stats:Number($('#crafted-stats').value)};
+    if(data.crafted)result.crafted={enabled:on('crafted'),itemLevel:Number($('#crafted-ilevel').value),stats:Number($('#crafted-stats').value),...(data.embellishments?.length?{embellishments:checked('emb')}:{})};
     return result;
   }
   function changed(event){
@@ -59,7 +65,7 @@ export function upgradeUI({api,notice,updateCount}){
     clearTimeout(countTimer);if(!data)return;
     if(!hasProfile){$('#upgrade-count').textContent='Import a character to count candidates.';return;}
     $('#upgrade-count').textContent='Counting candidates …';
-    countTimer=setTimeout(async()=>{try{const preview=await api('/api/preview',request());$('#upgrade-count').innerHTML=`<strong>${preview.upgrade.candidates} candidates</strong> across ${preview.upgrade.slots} slots · ${preview.total} SimC runs`;}catch(e){$('#upgrade-count').textContent=e.message;}},350);
+    countTimer=setTimeout(async()=>{try{const preview=await api('/api/preview',request());const u=preview.upgrade;$('#upgrade-count').innerHTML=`<strong>${u.candidates} candidates</strong> across ${u.slots} slots · ${preview.total} SimC runs${u.embellished?`<br>${u.embellished} with an embellishment`:''}${u.limitsUsed?.length?`<br>You wear: ${u.limitsUsed.map(h=>esc(h.name)).join(', ')}`:''}${u.blocked?` · ${u.blocked} left out by the equip limit`:''}`;}catch(e){$('#upgrade-count').textContent=e.message;}},350);
   }
   // Rings and trinkets are simulated in both of their slots; the filter treats each pair as one slot.
   const family=slot=>String(slot||'').replace(/[12]$/,'');
@@ -102,26 +108,38 @@ export function upgradeUI({api,notice,updateCount}){
       const base=baselines[2]||baselines[1];if(base)html+=`<p class="hint">Current gear: ${number(base.dps)} DPS${base.error95!==null?` ± ${number(base.error95)}`:''}</p>`;
       html+=slotFilterBar(measured);
       if(slotFilter!=='all')html+=`<p class="hint">${esc(familyNames[slotFilter]||slotFilter)}: every item measured for this slot, best first.${rows.length?'':' Nothing was measured for it in this job.'}</p>`;
-      for(const st of stages){if(st.status==='failed')html+=`<p class="notice">${st.stage===1?'Screening':'Final round'} failed: ${esc(st.error)}</p>`;if(st.status==='skipped')html+=`<p class="hint">${esc(st.reason)}</p>`;}
+      const stageName=n=>n===1?'Screening':n===3?'Embellishment pairs':'Final round';
+      for(const st of stages){if(st.status==='failed')html+=`<p class="notice">${stageName(st.stage)} failed: ${esc(st.error)}</p>`;if(st.status==='skipped')html+=`<p class="hint">${esc(st.reason)}</p>`;}
       if(upgrades.length){
         const groups=new Map();
         for(const r of upgrades)for(const src of r.c.sources){const g=groups.get(src.group);if(!g||r.rank>g.r.rank)groups.set(src.group,{src,r});}
-        html+=`<h4 class="upgrade-heading">Best upgrade per source</h4><div class="upgrade-source-list">${[...groups.values()].sort((a,b)=>b.r.rank-a.r.rank).map(({src,r})=>`<div class="upgrade-source"><span><small>${esc(originNames[src.origin])}</small><strong>${esc(src.groupName)}</strong></span><span>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · ${r.c.itemLevel}</small></span><b>+${r.rank.toFixed(2)}${r.tanky?'':' %'}</b></div>`).join('')}</div>`;
+        html+=`<h4 class="upgrade-heading">Best upgrade per source</h4><div class="upgrade-source-list">${[...groups.values()].sort((a,b)=>b.r.rank-a.r.rank).map(({src,r})=>`<div class="upgrade-source"><span><small>${esc(originNames[src.origin])}</small><strong>${esc(src.groupName)}</strong></span><span>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · ${r.c.itemLevel}${r.c.embellishment?` · ${esc(r.c.embellishment)}`:''}</small></span><b>+${r.rank.toFixed(2)}${r.tanky?'':' %'}</b></div>`).join('')}</div>`;
         html+=`<h4 class="upgrade-heading">All measured upgrades</h4>${table(upgrades)}`;
       }else if(stages.some(st=>st.stage===2&&st.status==='complete'))html+=`<p class="hint">No final-round candidate beat your current gear${slotFilter==='all'?'':' in this slot'}.</p>`;
       // With a slot picked, what lost in the final round is worth seeing too: that is the answer to
       // "why is this item not here?".
       const losers=rows.filter(r=>r.stage===2&&r.rank<=0);
       if(slotFilter!=='all'&&losers.length)html+=`<h4 class="upgrade-heading">Measured, but no better than your gear</h4>${table(losers.sort((a,b)=>b.rank-a.rank))}`;
+      if(slotFilter==='all')html+=pairsSection(job,s,candidates,baselines[3]);
       const screened=rows.filter(r=>r.stage===1);
       if(screened.length)html+=`<details class="log-details"${slotFilter==='all'?'':' open'}><summary>Screening results not simulated again (${screened.length})</summary>${table(screened.sort((a,b)=>b.rank-a.rank))}</details>`;
-      html+=`<p class="result-note">${stages.filter(st=>st.stem).map(st=>`${st.stage===1?'Screening':'Final round'} (${st.count}): <a href="/reports/${job.id}/${st.stem}.html" download>HTML</a> <a href="/reports/${job.id}/${st.stem}.json" download>JSON</a> <a href="/reports/${job.id}/${st.stem}.simc" download>Input</a>`).join(' · ')}</p></section>`;
+      html+=`<p class="result-note">${stages.filter(st=>st.stem).map(st=>`${stageName(st.stage)} (${st.count}): <a href="/reports/${job.id}/${st.stem}.html" download>HTML</a> <a href="/reports/${job.id}/${st.stem}.json" download>JSON</a> <a href="/reports/${job.id}/${st.stem}.simc" download>Input</a>`).join(' · ')}</p></section>`;
     }
     return `<div id="upgrade-results">${html}</div>`;
   }
+  // The best embellished upgrades worn two at a time. Each pair is one simulation against the current gear.
+  function pairsSection(job,s,candidates,base){
+    const pairs=(job.upgrade.pairs||[]).filter(p=>p.scenario===s);if(!pairs.length||!base)return '';
+    const rows=job.results.filter(r=>r.scenario===s&&r.stage===3&&r.status==='complete').map(r=>{const pair=pairs.find(p=>p.key===r.key);if(!pair)return null;
+      const tanky=Number.isFinite(r.score),percent=100*(r.dps-base.dps)/Math.max(1,base.dps);return {r,pair,tanky,rank:tanky?r.score:percent,percent};}).filter(Boolean).sort((a,b)=>b.rank-a.rank);
+    if(!rows.length)return '';
+    const part=p=>{const c=candidates.get(p.key);return c?`${itemLink(c.itemId,c.name,c.value)}<small>${esc(slotNames[p.slot]||p.slot)} · ${c.itemLevel}${c.embellishment?` · <b>${esc(c.embellishment)}</b>`:''}</small>`:esc(p.key);};
+    const limits=job.upgrade.limitsUsed?.length?` Next to what you keep wearing: ${job.upgrade.limitsUsed.map(h=>esc(h.name)).join(', ')}, unless a pair replaces it.`:'';
+    return `<h4 class="upgrade-heading">Best embellishment pairs</h4><p class="hint">The best embellished upgrades from the final round, worn two at a time. Only pairs you can equip together are shown.${limits}</p><table class="result-table"><thead><tr><th>First</th><th>Second</th><th>${rows[0].tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map(({r,pair,tanky,percent},i)=>`<tr class="${i===0&&(tanky?r.score:percent)>0?'winner':''}"><td>${part(pair.parts[0])}</td><td>${part(pair.parts[1])}</td><td>${tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %</small>`:`${percent>=0?'+':''}${percent.toFixed(2)} %<small>${number(r.dps-base.dps)} DPS</small>`}</td></tr>`).join('')}</tbody></table>`;
+  }
   function table(rows){
     const max=Math.max(...rows.map(r=>Math.abs(r.rank)),1e-9);const tanky=rows.some(r=>r.tanky);
-    return `<table class="result-table"><thead><tr><th>Item</th><th>Source</th><th>${tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i===0&&r.rank>0&&r.stage===2?'winner':''}"><td>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · item level ${r.c.itemLevel}${r.stage===1?' · screening only':''}</small>${r.rank>0?`<div class="bar"><span style="width:${(r.rank/max*100).toFixed(1)}%"></span></div>`:''}</td><td class="upgrade-source-cell">${r.c.sources.map(src=>`<small>${esc(src.label)}</small>`).join('')}</td><td>${r.tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %${r.uncertain?' · uncertain':''}</small>`:`${r.delta>=0?'+':''}${r.percent.toFixed(2)} %<small>${r.delta>=0?'+':''}${number(r.delta)} DPS${r.uncertain?' · uncertain':''}</small>`}</td></tr>`).join('')}</tbody></table>`;
+    return `<table class="result-table"><thead><tr><th>Item</th><th>Source</th><th>${tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i===0&&r.rank>0&&r.stage===2?'winner':''}"><td>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · item level ${r.c.itemLevel}${r.c.embellishment?` · <b>${esc(r.c.embellishment)}</b>`:''}${r.stage===1?' · screening only':''}</small>${r.rank>0?`<div class="bar"><span style="width:${(r.rank/max*100).toFixed(1)}%"></span></div>`:''}</td><td class="upgrade-source-cell">${r.c.sources.map(src=>`<small>${esc(src.label)}</small>`).join('')}</td><td>${r.tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %${r.uncertain?' · uncertain':''}</small>`:`${r.delta>=0?'+':''}${r.percent.toFixed(2)} %<small>${r.delta>=0?'+':''}${number(r.delta)} DPS${r.uncertain?' · uncertain':''}</small>`}</td></tr>`).join('')}</tbody></table>`;
   }
   $('#result-content').addEventListener('click',event=>{
     const chip=event.target.closest('[data-slot-filter]');
