@@ -51,7 +51,8 @@ test('install copies the shipped addon, writes Data.lua and touches nothing else
   assert.deepEqual(after.filter(f=>!f.startsWith('SimCLab/')),before,'other addons and loose files are untouched');
   assert.deepEqual(after.filter(f=>f.startsWith('SimCLab/')).map(f=>f.slice(8)),(await tree(shippedDir)),'exactly the shipped files, Data.lua included');
   assert.ok(!after.some(f=>f.endsWith('.tmp')),'no temp files left behind');
-  for(const f of shipped.files)assert.ok(await exists(path.join(addons,'SimCLab',f)),`${f} from the TOC is installed`);
+  // The TOC names files with WoW's backslashes; on Linux those are not path separators.
+  for(const f of shipped.files)assert.ok(await exists(path.join(addons,'SimCLab',...f.split('\\'))),`${f} from the TOC is installed`);
   assert.match(await fs.readFile(path.join(addons,'SimCLab','Data.lua'),'utf8'),/generated [^\n]*\n--[^\n]*\nlocal _, ns = \.\.\.\nns\.data = \{\n  schemaVersion=1,/);
 });
 

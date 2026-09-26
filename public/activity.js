@@ -42,7 +42,7 @@ export function activityUI({api,openJob,onChange}){
     const running=active.find(j=>j.status==='running'),queued=active.filter(j=>j.status==='queued').length;
     bar.hidden=!active.length;
     if(active.length){
-      first=(running||active[0]).id;
+      first=(running?.id?running:active.find(j=>j.id))?.id||null;
       const job=running||active[0];const left=running?timeLeft(running,running.fraction):null;
       bar.innerHTML=`<span class="activity-dot ${running?'on':''}"></span><span class="activity-text"><strong>${running?'Simulating':'Waiting'}</strong> ${esc(names[job.mode]||job.mode)} · ${esc(job.name)}${running?` · ${Math.round(100*running.fraction)}%${left!==null?` · ${duration(left)} left`:''}`:''}${queued?` <em>+${queued} queued</em>`:''}</span><span class="activity-track"><span style="width:${Math.round(100*(running?.fraction||0))}%"></span></span>`;
       bar.title=running?.current?`Now: ${running.current}`:'Open the running job';

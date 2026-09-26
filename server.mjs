@@ -21,9 +21,22 @@ import {Updater} from './lib/updater.mjs';
 import {WowAddon} from './lib/wowaddon.mjs';
 import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
 import {importArmory,isArmoryProfile} from './lib/armory.mjs';
+import {Accounts,cookie} from './lib/accounts.mjs';
 const port=Number(process.env.PORT || 8642);
 const pkg=JSON.parse(await fs.readFile(new URL('./package.json',import.meta.url),'utf8'));
-const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP};const token=randomBytes(32).toString('hex');
+// Server mode (SIMC_LAB_SERVER=1) shares one SimC Lab between invited accounts, usually behind a reverse proxy
+// that adds HTTPS. SIMC_LAB_PUBLIC_URL is the address people open; HOST is the interface to listen on.
+const serverMode=!!process.env.SIMC_LAB_SERVER;
+const publicUrl=process.env.SIMC_LAB_PUBLIC_URL?new URL(process.env.SIMC_LAB_PUBLIC_URL):null;
+const listenHost=process.env.HOST||'127.0.0.1';
+const trustProxy=!!process.env.SIMC_LAB_TRUST_PROXY;
+const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicUrl?[publicUrl.host]:[])];
+const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicUrl?[publicUrl.origin]:[])];
+const sessionCookie='simclab_session';
+const secureCookie=publicUrl?.protocol==='https:';
+const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP,server:serverMode,platform:process.platform};const token=randomBytes(32).toString('hex');
+const accounts=serverMode?await new Accounts().init():null;
+const limit=(name,fallback)=>{const n=Number(process.env[name]);return Number.isInteger(n)&&n>0?n:fallback;};
 // Game data is (re)loaded at start and after every engine update. Without an engine the app still starts,
 // so a first run can install SimC from the interface.
 let catalog=null,talentData=null,season=null,loadError=null;
@@ -32,7 +45,7 @@ async function loadData(){
   try{const c=await loadCatalog(source);const t=await loadTalentData(upstreamDir,source);const s=await loadSeason(upstreamDir,c,source);catalog=c;talentData=t;season=s;loadError=null;jobs.catalog=c;}
   catch(e){catalog=talentData=season=null;loadError=e.code==='ENOENT'?'SimC is not installed yet.':e.message;}
 }
-const jobs=new Jobs(null);await jobs.init();await loadData();
+const jobs=serverMode?new Jobs(null,{limit:limit('SIMC_LAB_QUEUE',20),perOwner:limit('SIMC_LAB_QUEUE_PER_USER',2)}):new Jobs(null);await jobs.init();await loadData();
 const busy=()=>[...jobs.jobs.values()].some(j=>['queued','running'].includes(j.status));
 const updater=new Updater({busy,onInstalled:loadData});
 // The WoW addon: installed from the copy inside the app, fed through Data.lua, and kept in step on every start.
@@ -44,27 +57,56 @@ async function sendToWow(job,options){
   return wow.send(identity(request.profile,talentData),simEntry(job,request,{season,tracks:trackTable(season)}),options);
 }
 jobs.onFinished=async job=>{
+  if(serverMode)return;
   if(!sendableModes[job.mode]||job.armory||!['complete','partial'].includes(job.status))return;
   const {settings}=await wow.loadStore();if(!settings.autoSend)return;
   try{await sendToWow(job,{auto:true});}catch(e){wow.last={id:job.id,auto:true,time:new Date().toISOString(),error:e.message};}
 };
-wow.autoUpdate().catch(e=>console.error('SimCLab addon update failed:',e.message));
+if(!serverMode)wow.autoUpdate().catch(e=>console.error('SimCLab addon update failed:',e.message));
 const ready=()=>{if(!catalog)throw new Error(loadError||'SimC is not installed yet. Use Update SimC.');};
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
+const armoryBusy=new Set();
+const address=req=>trustProxy&&req.headers['x-forwarded-for']?String(req.headers['x-forwarded-for']).split(',').pop().trim():req.socket.remoteAddress||'';
+function setSession(res,key){
+  res.setHeader('Set-Cookie',`${sessionCookie}=${key?encodeURIComponent(key):''}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${key?30*86400:0}${secureCookie?'; Secure':''}`);
+}
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>600000)throw new Error('The request is too large.');}return JSON.parse(text);}
 const server=http.createServer(async(req,res)=>{
   try{
-    if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(req.headers.host))return json(res,403,{error:'Invalid host.'});
+    if(!hosts.includes(req.headers.host))return json(res,403,{error:'Invalid host.'});
     const url=new URL(req.url,`http://127.0.0.1:${port}`);const route=url.pathname;
+    let viewer=null,csrf=token;
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
     if(!route.startsWith('/reports/'))res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' https://wow.zamimg.com https://www.wowhead.com https://nether.wowhead.com; style-src 'self' 'unsafe-inline' https://wow.zamimg.com; img-src 'self' data: https://wow.zamimg.com https://*.wowhead.com; frame-ancestors 'none'; connect-src 'self' https://www.wowhead.com https://nether.wowhead.com https://wow.zamimg.com");
-    if(req.method==='POST'){
-      const received=Buffer.from(req.headers['x-simc-token'] || '');const expected=Buffer.from(token);
-      if(received.length!==expected.length || !timingSafeEqual(received,expected))return json(res,403,{error:'Reload the page.'});
-      if(req.headers.origin && ![`http://127.0.0.1:${port}`,`http://localhost:${port}`].includes(req.headers.origin))return json(res,403,{error:'Invalid origin.'});
+    if(req.method==='POST'&&req.headers.origin&&!origins.includes(req.headers.origin))return json(res,403,{error:'Invalid origin.'});
+    if(serverMode){
+      // Signing in and registering come before a session exists; everything else under /api needs one.
+      if(req.method==='POST'&&route==='/api/auth/login'){if(!req.headers.origin)return json(res,403,{error:'Invalid origin.'});const {key,user}=await accounts.login(await body(req),address(req));setSession(res,key);return json(res,200,{user});}
+      if(req.method==='POST'&&route==='/api/auth/register'){if(!req.headers.origin)return json(res,403,{error:'Invalid origin.'});const {key,user}=await accounts.register(await body(req));setSession(res,key);return json(res,200,{user});}
+      const session=accounts.session(cookie(req,sessionCookie));
+      if(session){viewer=session.user;csrf=session.csrf;}
+      else if(route==='/'){res.writeHead(302,{Location:'/login'});return res.end();}
+      else if(route.startsWith('/api/')||/^\/(reports|tier-list|upgrade-report)\//.test(route))return json(res,401,{error:'Sign in to continue.',login:true});
     }
-    if(req.method==='GET'&&route==='/api/status')return json(res,200,{engine:await engineStatus(),expansion:catalog?.expansion||null,loadError,token,app:appInfo});
+    if(req.method==='POST'){
+      const received=Buffer.from(req.headers['x-simc-token'] || '');const expected=Buffer.from(csrf);
+      if(received.length!==expected.length || !timingSafeEqual(received,expected))return json(res,403,{error:'Reload the page.'});
+    }
+    const me=viewer&&accounts.publicUser(viewer);
+    const admin=()=>{if(serverMode&&!viewer?.admin)throw Object.assign(new Error('Only an admin can do that.'),{status:403});};
+    if(serverMode){
+      if(req.method==='POST'&&route==='/api/auth/logout'){await accounts.logout(cookie(req,sessionCookie));setSession(res,null);return json(res,200,{});}
+      if(req.method==='POST'&&route==='/api/auth/password'){const {key,user}=await accounts.changePassword(viewer,await body(req));setSession(res,key);return json(res,200,{user});}
+      if(req.method==='GET'&&route==='/api/admin/users'){admin();return json(res,200,{users:accounts.list(),invites:accounts.pendingInvites()});}
+      if(req.method==='POST'&&route==='/api/admin/invite'){admin();const {admin:asAdmin}=await body(req);const invite=await accounts.invite({admin:!!asAdmin,by:viewer.id});return json(res,200,{...invite,link:`${publicUrl?.origin||req.headers.origin||''}/login#invite=${invite.code}`});}
+      if(req.method==='POST'&&route==='/api/admin/remove'){admin();const {id}=await body(req);return json(res,200,{users:await accounts.remove(String(id),viewer)});}
+      if(req.method==='POST'&&route==='/api/admin/role'){admin();const {id,admin:asAdmin}=await body(req);return json(res,200,{users:await accounts.setAdmin(String(id),!!asAdmin,viewer)});}
+      // The game is on each player's own PC, so the WoW addon bridge does not exist on a server.
+      if(route.startsWith('/api/wow'))return json(res,404,{error:'The WoW addon works with the desktop app only.'});
+      if(route.startsWith('/api/engine/')&&req.method==='POST')admin();
+    }
+    if(req.method==='GET'&&route==='/api/status')return json(res,200,{engine:await engineStatus(),expansion:catalog?.expansion||null,loadError,token:csrf,app:appInfo,user:me});
     if(req.method==='GET'&&route==='/api/engine/update')return json(res,200,updater.state);
     if(req.method==='POST'&&route==='/api/engine/check')return json(res,200,await updater.check());
     if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto'}=await body(req);if(!['auto','nightly','source','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode));}
@@ -94,7 +136,10 @@ const server=http.createServer(async(req,res)=>{
       const slot=url.searchParams.get('slot'),info={class:url.searchParams.get('class'),spec:url.searchParams.get('spec'),level:url.searchParams.get('level')??90};if(!slotTypes[slot])return json(res,400,{error:'Select an equipment slot.'});
       const q=(url.searchParams.get('q')||'').toLowerCase();const result=catalog.currentItems.filter(i=>fitsSlot(i,slot,info)&&(i.name.toLowerCase().includes(q)||String(i.id)===q)).slice(0,100).map(i=>({id:i.id,name:i.name,itemLevel:i.itemLevel,expansion:i.expansion}));return json(res,200,result);
     }
-    if(req.method==='POST'&&route==='/api/armory'){if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const {region,realm,name,url:link}=await body(req);return json(res,200,await importArmory({region,realm,name,url:link},{executable:engine.executable}));}
+    if(req.method==='POST'&&route==='/api/armory'){if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const {region,realm,name,url:link}=await body(req);
+      // One Armory lookup per account at a time: each one starts SimC.
+      const who=viewer?.id||'';if(armoryBusy.has(who))throw new Error('An Armory import is already running.');armoryBusy.add(who);
+      try{return json(res,200,await importArmory({region,realm,name,url:link},{executable:engine.executable}));}finally{armoryBusy.delete(who);}}
     if(req.method==='POST'&&route==='/api/import'){
       const text=(await body(req)).profile;const p=parseProfile(text);p.upgradeState=readUpgradeState(text);
       for(const item of Object.values(p.gear)){item.item=catalog.items.get(item.id)||null;item.enchants=catalog.forItem(item.id,p.info.class);}
@@ -111,16 +156,16 @@ const server=http.createServer(async(req,res)=>{
       const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,healers:plan.weapons.specs.filter(s=>s.healer).length,craftedStats:plan.weapons.craftedStats.length,sources:plan.weapons.sources,levels:plan.weapons.levels,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
       return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
     }
-    if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
-    if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs());
-    if(req.method==='GET'&&route==='/api/jobs')return json(res,200,[...jobs.jobs.values()].reverse().map(j=>({id:j.id,name:j.name,mode:j.mode,status:j.status,created:j.created,done:j.done,total:j.total,fraction:jobFraction(j)})));
+    if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request,viewer?.id||null)));}
+    if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs(me));
+    if(req.method==='GET'&&route==='/api/jobs')return json(res,200,[...jobs.jobs.values()].reverse().filter(j=>jobs.visible(j,me)).map(j=>({id:j.id,name:j.name,mode:j.mode,status:j.status,created:j.created,done:j.done,total:j.total,fraction:jobFraction(j)})));
     const jobRoute=route.match(/^\/api\/jobs\/([\da-f-]{36})(\/cancel)?$/);
-    if(jobRoute){const job=jobs.jobs.get(jobRoute[1]);if(!job)return json(res,404,{error:'Job not found.'});if(req.method==='POST'&&jobRoute[2])return json(res,200,await jobs.cancel(job.id));if(req.method==='GET'&&!jobRoute[2])return json(res,200,{...jobs.public(job),queue:jobs.queueFor(job),fraction:jobFraction(job)});}
+    if(jobRoute){const job=jobs.jobs.get(jobRoute[1]);if(!job||!jobs.visible(job,me))return json(res,404,{error:'Job not found.'});if(req.method==='POST'&&jobRoute[2])return json(res,200,await jobs.cancel(job.id));if(req.method==='GET'&&!jobRoute[2])return json(res,200,{...jobs.public(job),queue:jobs.queueFor(job,me),fraction:jobFraction(job)});}
     // The tier list is written here rather than by SimC, and carries no script, so it can be read in place.
     const tierList=route.match(/^\/tier-list\/([\da-f-]{36})\.html$/);
     if(req.method==='GET'&&tierList){
       const job=jobs.jobs.get(tierList[1]);
-      if(!job?.weapons)return json(res,404,{error:'No Weapon Lab job with that id.'});
+      if(!job?.weapons||!jobs.visible(job,me))return json(res,404,{error:'No Weapon Lab job with that id.'});
       const html=tierListPage(jobs.public(job));
       const filename=`weapon-tier-list-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
@@ -130,7 +175,7 @@ const server=http.createServer(async(req,res)=>{
     const upgradeReport=route.match(/^\/upgrade-report\/([\da-f-]{36})\.html$/);
     if(req.method==='GET'&&upgradeReport){
       const job=jobs.jobs.get(upgradeReport[1]);
-      if(!job?.upgrade)return json(res,404,{error:'No Upgrade Finder job with that id.'});
+      if(!job?.upgrade||!jobs.visible(job,me))return json(res,404,{error:'No Upgrade Finder job with that id.'});
       const request=JSON.parse(await fs.readFile(path.join(runsDir,job.id,'request.json'),'utf8'));
       let info={},equipped={};try{const p=parseProfile(request.profile);info=p.info;for(const [slot,g] of Object.entries(p.gear))if(g.id)equipped[slot]={id:g.id,value:g.value,name:catalog?.items.get(g.id)?.name};}catch{}
       const html=upgradeReportPage(jobs.public(job),{info,equipped,armory:isArmoryProfile(request.profile)});
@@ -140,15 +185,31 @@ const server=http.createServer(async(req,res)=>{
     }
     const report=route.match(/^\/reports\/([\da-f-]{36})\/(\d{3}\.(?:html|json|simc)|request\.json)$/);
     if(req.method==='GET'&&report){
+      const owner=jobs.jobs.get(report[1]);if(!owner||!jobs.visible(owner,me))return json(res,404,{error:'Not found.'});
       const data=await fs.readFile(path.join(runsDir,report[1],report[2]));
       const ext=path.extname(report[2]);
       // Reports are generated by SimC. Serve downloads so their scripts never share this app's origin.
       res.writeHead(200,{'Content-Type':ext==='.json'?'application/json':'application/octet-stream','Content-Disposition':`attachment; filename="${report[2]}"`});return res.end(data);
     }
-    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css'};
+    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css','/account.js':'account.js',...(serverMode?{'/login':'login.html','/login.js':'login.js'}:{})};
     if(req.method==='GET'&&assets[route]){const file=assets[route];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(await fs.readFile(path.join(root,'public',file)));}
     json(res,404,{error:'Not found.'});
-  }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}
+  }catch(e){json(res,e.status||(e.code==='ENOENT'?404:400),{error:e.message});}
 });
-server.listen(port,'127.0.0.1',()=>console.log(`SimC Lab: http://127.0.0.1:${port}`));
+server.listen(port,listenHost,async()=>{
+  console.log(`SimC Lab${serverMode?' server':''}: http://${listenHost}:${port}${publicUrl?` (public address ${publicUrl.origin})`:''}`);
+  if(!serverMode)return;
+  const invite=await accounts.bootstrap();
+  if(invite)console.log(`No accounts yet. Create the first admin account within 7 days:\n  ${publicUrl?.origin||`http://127.0.0.1:${port}`}/login#invite=${invite.code}`);
+});
+// SIMC_LAB_AUTO_UPDATE keeps an unattended server on the live WoW build: a minute after start and then every six
+// hours, SimC and game data are updated when something new is out and no simulation is waiting.
+if(process.env.SIMC_LAB_AUTO_UPDATE){
+  const tick=async()=>{
+    if(busy()||updater.state.status==='running')return;
+    try{const {decision}=await updater.check();if(['nightly','source','data'].includes(decision.action)){console.log(`Automatic SimC update: ${decision.reason}`);updater.start('auto');}}
+    catch(e){console.error('Automatic SimC update check failed:',e.message);}
+  };
+  setTimeout(tick,60000).unref();setInterval(tick,6*3600000).unref();
+}
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{jobs.child?.kill();server.close();process.exit(0);});

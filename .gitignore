@@ -11,3 +11,4 @@ desktop/dist/
 dist-test/
 *.err
 /node_modules/
+desktop/dist-linux/

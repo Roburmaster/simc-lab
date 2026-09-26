@@ -1,10 +1,14 @@
 # SimC Lab
 
-A SimulationCraft workbench for Windows: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, Weapon Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
+A SimulationCraft workbench for Windows and Linux: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, Weapon Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
 
-**Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
+**Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [SimC-Lab.AppImage](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab.AppImage) or [simc-lab_amd64.deb](https://github.com/Roburmaster/simc-lab/releases/latest/download/simc-lab_amd64.deb) (Linux, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
 
 The installer is not code-signed yet, so Windows SmartScreen may warn on first install: choose More info, then Run anyway. On first start, press Install SimC.
+
+On Linux, make the AppImage executable (`chmod +x SimC-Lab.AppImage`) or install the .deb (`sudo apt install ./simc-lab_amd64.deb`). SimC is built from source there, so install the build tools first: `sudo apt install git cmake build-essential libcurl4-openssl-dev`.
+
+**Server:** SimC Lab also runs on a Linux server shared by friends or a guild, with invite-only accounts and a fair queue. See [docs/server.md](docs/server.md).
 
 For development, run `npm run install-engine` once and then `npm start` (http://127.0.0.1:8642), or double-click Start-SimC-Lab.cmd.
 
@@ -167,11 +171,13 @@ Results include DPS, differences from baseline, approximate 95% confidence inter
 
 Jobs run sequentially with configurable CPU threads. Limits are 128 alternative builds, 256 runs per job (Upgrade Finder: 800 candidates, two profileset runs per scenario; Weapon Lab: 2,400 candidate runs, one or two profileset runs per specialization and scenario) and 5 queued/running jobs. Active and queued jobs can be cancelled. Files are stored in runs/; the import field is also remembered in browser localStorage.
 
-The server listens only on 127.0.0.1, verifies Host and POST tokens, rejects file/network/output directives in profile imports, and launches SimC without a shell. The compiled engine has networking disabled.
+The desktop server listens only on 127.0.0.1 (server mode: see docs/server.md), verifies Host and POST tokens, rejects file/network/output directives in profile imports, and launches SimC without a shell. The compiled engine has networking disabled.
 
 ## Desktop app and updates
 
 SimC Lab installs as a normal Windows program (desktop/). The installer adds Start menu and desktop shortcuts, needs no administrator rights and opens the app in its own window. The engine, game data, runs and logs live in %LOCALAPPDATA%\SimC Lab, so updating or uninstalling the app keeps them.
+
+On Linux the same app ships as an AppImage and a .deb. Its data lives in `~/.local/share/simc-lab` (`$XDG_DATA_HOME/simc-lab`). SimC has no official Linux builds, so Update SimC always builds from source with the system's Git, CMake, C++ compiler and libcurl (with networking, so the Armory import works); a missing tool is named with the apt command rather than installed. WoW is found in the usual Wine prefixes (Lutris' ~/Games/battlenet, ~/.wine, Steam/Proton and Bottles); set WOW_BUILD_INFO when it is elsewhere. The AppImage updates itself like the Windows app; the .deb is updated by installing the next one.
 
 **Update SimC** (sidebar, engine panel, or the install screen on first start) does everything in one step:
 
@@ -188,7 +194,7 @@ GitHub CI and releases never install or compile SimC. The app installs it locall
 
 1. Raise the version in package.json, desktop/package.json, package-lock.json (`npm install --package-lock-only`) and the addon's `## Version` in addon/SimCLab/SimCLab.toc, and merge that change to main. The app, the desktop shell and the addon carry the same version, so an installed addon is updated whenever the app is; a test fails if one of them drifts.
 2. Create the matching tag: `git tag v1.2.3 && git push origin v1.2.3`.
-3. The Release workflow checks that the tag matches package.json, runs the standalone app and addon tests with `npm run test:ci`, builds the installer and, after the owner approves the release environment, publishes SimC-Lab-Setup.exe, its blockmap and latest.yml to GitHub Releases.
+3. The Release workflow checks that the tag matches package.json, runs the standalone app and addon tests with `npm run test:ci`, builds the installer and, after the owner approves the release environment, publishes SimC-Lab-Setup.exe, its blockmap and latest.yml to GitHub Releases. A Linux job builds SimC-Lab.AppImage, simc-lab_amd64.deb and latest-linux.yml first, and the approved job publishes them in the same release.
 
 **Releasing the addon alone.** Raise `## Version` in `addon/SimCLab/SimCLab.toc`, merge, then tag `addon-v1.2.3`. The Addon release workflow checks the tag against the TOC, runs the tests, packs the addon (`node scripts/pack-addon.mjs`) and, after the same approval, publishes `addon.json` and `SimCLab-addon.zip`. No installer is built, and installed apps pick the addon up on their next start. The addon's version is its own; the app, the desktop shell and the lockfile share theirs.
 

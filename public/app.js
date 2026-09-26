@@ -9,6 +9,7 @@ import {engineUI} from '/engine.js';
 import {activityUI,describeProgress,duration} from '/activity.js';
 import {wowUI} from '/wow.js';
 import {armoryUI} from '/armory.js';
+import {accountUI} from '/account.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,7 +19,7 @@ const modes={quick:['Quick Sim','Import your character. Find out what your gear 
 const states={queued:'Queued',running:'Running',complete:'Complete',partial:'Partially complete',failed:'Failed',cancelled:'Cancelled',interrupted:'Interrupted on restart'};
 let token='',engine=null,mode='quick',profile=null,importedText='',selections={},currentJob=null,pollTimer=null,previewTimer=null;
 let variants=[{name:'Alternative 1',text:''}];
-async function api(url,data){const res=await fetch(url,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-SimC-Token':token},body:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw new Error(result.error||'The request failed.');return result;}
+async function api(url,data){const res=await fetch(url,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-SimC-Token':token},body:JSON.stringify(data)});const result=await res.json();if(res.status===401&&result.login){location.href='/login';throw new Error(result.error);}if(!res.ok)throw new Error(result.error||'The request failed.');return result;}
 function notice(message){$('#notice').hidden=!message;$('#notice').textContent=message||'';}
 function safeStore(key,value){try{localStorage.setItem(key,value);}catch{}}
 async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.mode===value));$('#page-title').innerHTML=`${esc(modes[value][0])}<span class="accent">.</span>`;$('#breadcrumb').textContent=modes[value][0];$('#page-description').textContent=modes[value][1];$('#workspace').hidden=['history','wow'].includes(value);$('#history').hidden=value!=='history';$('#wow-panel').hidden=value!=='wow';$('#enchant-panel').hidden=value!=='enchants';$('#compare-panel').hidden=value!=='compare';$('#quick-info').hidden=value!=='quick';$('#talent-panel').hidden=value!=='talents';$('#upgrade-panel').hidden=value!=='upgrades';$('#crest-panel').hidden=value!=='crests';$('#weapon-panel').hidden=value!=='weapons';
@@ -72,7 +73,7 @@ async function watchJob(id){clearTimeout(pollTimer);currentJob=id;$('#results').
 async function poll(){clearTimeout(pollTimer);try{const id=currentJob;const job=await api(`/api/jobs/${id}`);if(id!==currentJob)return;renderJob(job);if(['running','queued'].includes(job.status))pollTimer=setTimeout(poll,1200);}catch(e){notice(e.message);pollTimer=setTimeout(poll,3000);}}
 function renderJob(job){
   $('#job-status').textContent=states[job.status]||job.status;$('#job-log').textContent=job.log || (job.status==='queued'?'Waiting for earlier jobs to finish …':'Waiting for the engine …');$('#cancel').hidden=!['running','queued'].includes(job.status);
-  const waiting=job.queue?.ahead?.length?`<div class="queue-note">Waiting in the queue behind ${job.queue.ahead.length} job${job.queue.ahead.length===1?'':'s'}. Simulations run one at a time.${job.queue.ahead.map(j=>`<br>${esc(modes[j.mode]?.[0]||j.mode)} · ${esc(j.name)} · ${j.status==='running'?`running, ${j.done} / ${j.total}${j.current?' · '+esc(j.current):''}`:'queued'} <button class="text-button" data-watch-job="${esc(j.id)}">Show</button>`).join('')}</div>`:'';
+  const waiting=job.queue?.ahead?.length?`<div class="queue-note">Waiting in the queue behind ${job.queue.ahead.length} job${job.queue.ahead.length===1?'':'s'}. Simulations run one at a time.${job.queue.ahead.map(j=>`<br>${esc(modes[j.mode]?.[0]||j.mode)} · ${esc(j.name)} · ${j.status==='running'?`running, ${j.done} / ${j.total}${j.current?' · '+esc(j.current):''}`:'queued'} ${j.id?`<button class="text-button" data-watch-job="${esc(j.id)}">Show</button>`:''}`).join('')}</div>`:'';
   const progress=describeProgress(job);const scenario=job.current?.scenario?` · ${esc(job.current.scenario.style)}, ${job.current.scenario.targets} target${job.current.scenario.targets===1?'':'s'}`:'';
   const took=job.started&&job.finished?` · took ${duration((new Date(job.finished)-new Date(job.started))/1000)}`:'';
   $('#job-progress').innerHTML=waiting+`<div class="progress-description"><strong>${esc(job.name)}</strong> · ${job.done} of ${job.total} steps done${scenario}${took}${progress.lines.map(l=>`<br>${l}`).join('')}${job.error?`<br>${esc(job.error)}`:''}</div><div class="progress-track${job.status==='running'?' live':''}"><div class="progress-fill" style="width:${Math.round(100*progress.fraction)}%"></div></div>`;
@@ -100,7 +101,7 @@ async function loadHistory(){const jobs=await api('/api/jobs');$('#history-list'
 $('#refresh-history').addEventListener('click',()=>loadHistory().catch(e=>notice(e.message)));
 $('#history-list').addEventListener('click',async event=>{const row=event.target.closest('[data-job]');if(row){await setMode(['weapons','crests'].includes(row.dataset.jobMode)?row.dataset.jobMode:'quick');await watchJob(row.dataset.job);$('#results').scrollIntoView({behavior:'smooth'});}});
 async function init(){
-  try{const status=await api('/api/status');token=status.token;engine=status.engine;engineView.render(status);
+  try{const status=await api('/api/status');token=status.token;engine=status.engine;account.render(status);engineView.render(status);
     $('#wow-version').textContent=engine.installed||'Not found';$('#side-version').textContent=engine.version?`SimulationCraft ${engine.version}`:'Not installed';$('#engine-badge').textContent=engine.compatible&&engine.ready?'Live build verified':engine.ready?'Update SimC for your WoW version':'SimC not installed';$('#engine-badge').classList.toggle('warning',!engine.compatible||!engine.ready);
     // Without an engine only the install screen is useful.
     if(engineView.missing()){$('#workspace').hidden=true;return;}
@@ -123,6 +124,7 @@ const upgrades=upgradeUI({api,notice,updateCount});
 const crests=crestUI({api,notice,updateCount});
 const weapons=weaponUI({api,notice,updateCount});
 const engineView=engineUI({api,notice});
+const account=accountUI({api,notice});
 const activity=activityUI({api,openJob:async id=>{if(mode==='history')await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});},onChange:()=>{if(mode==='history')loadHistory().catch(()=>{});}});
 const wow=wowUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});
 armoryUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});

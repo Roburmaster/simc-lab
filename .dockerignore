@@ -1,0 +1,8 @@
+*
+!package.json
+!server.mjs
+!LICENSE
+!lib/**
+!public/**
+!profiles/**
+!scripts/server-invite.mjs

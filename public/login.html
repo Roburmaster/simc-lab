@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><title>Sign in · SimC Lab</title><link rel="stylesheet" href="/style.css"></head>
+<body class="login-page">
+<main class="login-box panel">
+<a class="brand" href="/"><span class="brand-mark">S<span>≋</span></span><span>SIMC <b>LAB</b><small>by mpcombat</small></span></a>
+<form id="login-form">
+<h1 id="login-title">Sign in</h1>
+<p id="login-help" class="hint">Accounts are made from invite links. Ask the admin of this server for one.</p>
+<label>Name<input id="login-name" name="username" autocomplete="username" required minlength="2" maxlength="24"></label>
+<label>Password<input id="login-password" name="password" type="password" autocomplete="current-password" required minlength="1" maxlength="200"></label>
+<label id="login-confirm-row" hidden>Repeat password<input id="login-confirm" type="password" autocomplete="new-password" maxlength="200"></label>
+<p id="login-error" class="notice" hidden></p>
+<button class="button primary" id="login-submit">Sign in <span>→</span></button>
+</form>
+</main>
+<script type="module" src="/login.js"></script></body></html>

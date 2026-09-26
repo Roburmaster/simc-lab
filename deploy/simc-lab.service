@@ -1,0 +1,28 @@
+# SimC Lab server as a systemd service, for running without Docker. install-ubuntu.sh puts the app in
+# /opt/simc-lab and this file in /etc/systemd/system; settings go in /etc/simc-lab.env.
+[Unit]
+Description=SimC Lab server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=simclab
+Group=simclab
+WorkingDirectory=/opt/simc-lab
+Environment=NODE_ENV=production SIMC_LAB_SERVER=1 SIMC_LAB_HOME=/var/lib/simc-lab HOST=127.0.0.1 PORT=8642
+EnvironmentFile=-/etc/simc-lab.env
+ExecStart=/usr/bin/node /opt/simc-lab/server.mjs
+Restart=on-failure
+RestartSec=5
+# SimC runs as a child of the server; stopping the service stops a running simulation too.
+KillMode=control-group
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/simc-lab
+StateDirectory=simc-lab
+
+[Install]
+WantedBy=multi-user.target

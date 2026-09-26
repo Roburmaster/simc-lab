@@ -2,6 +2,7 @@ name: Release
 
 # A release starts from a version tag (v1.2.3). Only the repository owner may create those tags,
 # and the release environment waits for the owner's approval before anything is published.
+# The Linux build runs first without write access; the approved job publishes both platforms at once.
 on:
   push:
     tags: ['v*']
@@ -10,7 +11,42 @@ permissions:
   contents: read
 
 jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Tag must match package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
+      - name: Test dependencies (Lua parser and VM for the addon tests)
+        run: npm ci
+      # SimC installation and live-data tests run locally on the user's PC.
+      - name: App and addon tests (no SimC installation)
+        run: npm run test:ci
+      - name: Build the AppImage and .deb
+        working-directory: desktop
+        run: |
+          npm ci
+          node build.mjs --linux
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux
+          path: |
+            desktop/dist/SimC-Lab.AppImage
+            desktop/dist/simc-lab_amd64.deb
+            desktop/dist/latest-linux.yml
+          if-no-files-found: error
+          retention-days: 3
+
   release:
+    needs: linux
     runs-on: windows-latest
     timeout-minutes: 45
     environment: release
@@ -38,10 +74,15 @@ jobs:
         run: |
           npm ci
           node build.mjs
-      # One upload of all three files: the installer, its blockmap (for small differential updates) and
-      # latest.yml, which installed apps read to find the new version.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux
+          path: desktop/dist
+      # One upload of every file: the Windows installer, its blockmap (small differential updates) and latest.yml,
+      # which installed apps read to find the new version; the AppImage with latest-linux.yml, which installed
+      # AppImages read the same way; and the .deb.
       - name: Publish the GitHub release
         working-directory: desktop/dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" SimC-Lab-Setup.exe SimC-Lab-Setup.exe.blockmap latest.yml --verify-tag --title "SimC Lab ${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" SimC-Lab-Setup.exe SimC-Lab-Setup.exe.blockmap latest.yml SimC-Lab.AppImage simc-lab_amd64.deb latest-linux.yml --verify-tag --title "SimC Lab ${{ github.ref_name }}" --generate-notes

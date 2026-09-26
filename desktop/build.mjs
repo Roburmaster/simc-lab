@@ -1,4 +1,5 @@
-// Builds the Windows installer: node build.mjs
+// Builds the installers: node build.mjs. Windows gets the NSIS installer, Linux an AppImage and a .deb;
+// --win or --linux picks one explicitly.
 // The version comes from ../package.json. The release workflow uploads the build to GitHub Releases, where
 // installed apps look for updates. SIMC_LAB_UPDATE_URL and SIMC_LAB_DIST
 // make a test build that updates from a local folder served by serve-release.mjs instead.
@@ -15,8 +16,9 @@ const pkgFile=path.join(here,'package.json');
 const pkg=JSON.parse(await fs.readFile(pkgFile,'utf8'));
 if(pkg.version!==version){pkg.version=version;await fs.writeFile(pkgFile,JSON.stringify(pkg,null,2)+'\n');}
 
+const linux=process.argv.includes('--linux')||(!process.argv.includes('--win')&&process.platform==='linux');
 await build({
-  targets:Platform.WINDOWS.createTarget('nsis',Arch.x64),
+  targets:linux?Platform.LINUX.createTarget(['AppImage','deb'],Arch.x64):Platform.WINDOWS.createTarget('nsis',Arch.x64),
   projectDir:here,
   publish:process.env.PUBLISH==='always'?'always':'never',
   config:{
@@ -32,6 +34,9 @@ await build({
     extraResources:[{from:root,to:'server',filter:['server.mjs','package.json','lib/**/*','public/**/*','addon/SimCLab/**/*','profiles/**/*']},{from:path.join(root,'LICENSE'),to:'LICENSE'}],
     // A fixed file name gives the website a download link that always points at the newest release.
     win:{icon:'build/icon.ico',artifactName:'SimC-Lab-Setup.${ext}'},
+    // The AppImage updates itself like the Windows installer does; the .deb is for those who prefer apt.
+    linux:{icon:'build/icon.png',category:'Game',executableName:'simc-lab',artifactName:'SimC-Lab.${ext}',synopsis:'SimulationCraft workbench',maintainer:'Roburmaster <noreply@mythicpersona.com>'},
+    deb:{artifactName:'simc-lab_amd64.${ext}'},
     nsis:{installerIcon:'build/icon.ico',uninstallerIcon:'build/icon.ico',license:path.join(root,'LICENSE'),oneClick:false,perMachine:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'SimC Lab',deleteAppDataOnUninstall:false},
     publish:[local?{provider:'generic',url:local}:{provider:'github',owner:release.owner,repo:release.repo,releaseType:'release'}]
   }

@@ -1,0 +1,38 @@
+# SimC Lab server with Caddy in front for HTTPS. Copy this folder to the server, set the domain in .env
+# (SIMC_LAB_DOMAIN=simc.example.com), then: docker compose up -d --build
+# The first admin invite link is printed in: docker compose logs simc-lab
+services:
+  simc-lab:
+    build: ..
+    restart: unless-stopped
+    environment:
+      SIMC_LAB_PUBLIC_URL: https://${SIMC_LAB_DOMAIN:?set SIMC_LAB_DOMAIN in .env}
+      SIMC_LAB_TRUST_PROXY: "1"
+      # Builds SimC and fetches game data on its own when WoW patches; checked every 6 hours while idle.
+      SIMC_LAB_AUTO_UPDATE: "1"
+      # Optional: a Blizzard API client (clientid:secret from develop.battle.net) for the Armory import.
+      SIMC_LAB_BLIZZARD_API_KEY: ${SIMC_LAB_BLIZZARD_API_KEY:-}
+      # Compiler jobs for the SimC build; each takes about 1.5 GB of memory.
+      SIMC_LAB_BUILD_JOBS: ${SIMC_LAB_BUILD_JOBS:-}
+    volumes:
+      - simc-lab-data:/data
+    expose:
+      - "8642"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SIMC_LAB_DOMAIN: ${SIMC_LAB_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  simc-lab-data:
+  caddy-data:
+  caddy-config:
