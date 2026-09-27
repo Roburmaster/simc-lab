@@ -1,6 +1,9 @@
-# SimC Lab server with Caddy in front for HTTPS. Copy this folder to the server, set the domain in .env
-# (SIMC_LAB_DOMAIN=simc.example.com), then: docker compose up -d --build
-# The first admin invite link is printed in: docker compose logs simc-lab
+# SimC Lab server with Caddy in front for HTTPS (see docs/server.md). Plain settings go in .env; the two
+# secrets are Docker secrets read from files in ./secrets (chmod 600), never environment variables:
+#   secrets/discord_client_secret   the Discord application's client secret
+#   secrets/data_key                32 random bytes in base64 (openssl rand -base64 32) that encrypt the accounts
+# Docker keeps these files as they are, so the Ubuntu install with encrypted systemd credentials is the one
+# that has no secret in clear text on disk.
 services:
   simc-lab:
     build: ..
@@ -8,12 +11,22 @@ services:
     environment:
       SIMC_LAB_PUBLIC_URL: https://${SIMC_LAB_DOMAIN:?set SIMC_LAB_DOMAIN in .env}
       SIMC_LAB_TRUST_PROXY: "1"
+      # Discord sign-in. Add https://<domain>/auth/discord/callback to the application's OAuth2 redirects.
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?set DISCORD_CLIENT_ID in .env}
+      DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      SIMC_LAB_DATA_KEY_FILE: /run/secrets/data_key
+      SIMC_LAB_DISCORD_ADMINS: ${SIMC_LAB_DISCORD_ADMINS:-}
+      SIMC_LAB_DISCORD_ADMIN_ROLE: ${SIMC_LAB_DISCORD_ADMIN_ROLE:-}
+      SIMC_LAB_DISCORD_GUILD: ${SIMC_LAB_DISCORD_GUILD:-}
+      SIMC_LAB_DISCORD_ROLE: ${SIMC_LAB_DISCORD_ROLE:-}
       # Builds SimC and fetches game data on its own when WoW patches; checked every 6 hours while idle.
       SIMC_LAB_AUTO_UPDATE: "1"
-      # Optional: a Blizzard API client (clientid:secret from develop.battle.net) for the Armory import.
-      SIMC_LAB_BLIZZARD_API_KEY: ${SIMC_LAB_BLIZZARD_API_KEY:-}
+      SIMC_LAB_QUEUE_PER_USER: ${SIMC_LAB_QUEUE_PER_USER:-2}
       # Compiler jobs for the SimC build; each takes about 1.5 GB of memory.
       SIMC_LAB_BUILD_JOBS: ${SIMC_LAB_BUILD_JOBS:-}
+    secrets:
+      - discord_client_secret
+      - data_key
     volumes:
       - simc-lab-data:/data
     expose:
@@ -31,6 +44,12 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+
+secrets:
+  discord_client_secret:
+    file: ./secrets/discord_client_secret
+  data_key:
+    file: ./secrets/data_key
 
 volumes:
   simc-lab-data:

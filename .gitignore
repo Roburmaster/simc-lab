@@ -12,3 +12,6 @@ dist-test/
 *.err
 /node_modules/
 desktop/dist-linux/
+deploy/.env
+.env
+deploy/secrets/

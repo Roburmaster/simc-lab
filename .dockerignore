@@ -5,4 +5,4 @@
 !lib/**
 !public/**
 !profiles/**
-!scripts/server-invite.mjs
+!scripts/invite-keys.mjs

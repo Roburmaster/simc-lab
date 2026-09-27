@@ -14,7 +14,7 @@ COPY package.json server.mjs LICENSE ./
 COPY lib lib
 COPY public public
 COPY profiles profiles
-COPY scripts/server-invite.mjs scripts/
+COPY scripts/invite-keys.mjs scripts/
 
 RUN mkdir /data && chown node:node /data
 USER node

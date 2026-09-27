@@ -10,19 +10,20 @@ import {activityUI,describeProgress,duration} from '/activity.js';
 import {wowUI} from '/wow.js';
 import {armoryUI} from '/armory.js';
 import {accountUI} from '/account.js';
+import {queueUI} from '/queue.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(n);
 const labels={head:'Head',neck:'Neck',shoulder:'Shoulders',back:'Back',chest:'Chest',wrist:'Wrists',hands:'Hands',waist:'Waist',legs:'Legs',feet:'Feet',finger1:'Ring 1',finger2:'Ring 2',main_hand:'Main hand',off_hand:'Offhand'};
-const modes={quick:['Quick Sim','Import your character. Find out what your gear can do.'],enchants:['Enchant Lab','Test Midnight enchants, ranks and combinations on your character.'],compare:['Gear Compare','Compare current-expansion gear, gems, talents and consumables.'],upgrades:['Upgrade Finder','Search raid, Mythic+, Great Vault, delve and crafted loot for your best simulated upgrades.'],crests:['Crest Planner','Find which equipped item to upgrade first with the crests you have.'],weapons:['Weapon Lab','Rank this season’s weapons, off-hands and shields for every specialization at one item level.'],talents:['Talent Search','Automatically generate legal builds and find the strongest tested talents for your gear.'],history:['History','Open previous results and download complete SimC reports.'],wow:['WoW addon','Bring your sims and gear farm into the game.']};
+const modes={quick:['Quick Sim','Import your character. Find out what your gear can do.'],enchants:['Enchant Lab','Test Midnight enchants, ranks and combinations on your character.'],compare:['Gear Compare','Compare current-expansion gear, gems, talents and consumables.'],upgrades:['Upgrade Finder','Search raid, Mythic+, Great Vault, delve and crafted loot for your best simulated upgrades.'],crests:['Crest Planner','Find which equipped item to upgrade first with the crests you have.'],weapons:['Weapon Lab','Rank this season’s weapons, off-hands and shields for every specialization at one item level.'],talents:['Talent Search','Automatically generate legal builds and find the strongest tested talents for your gear.'],queue:['Queue','Everything waiting for the engine, in the order it will run.'],history:['History','Open previous results and download complete SimC reports.'],wow:['WoW addon','Bring your sims and gear farm into the game.']};
 const states={queued:'Queued',running:'Running',complete:'Complete',partial:'Partially complete',failed:'Failed',cancelled:'Cancelled',interrupted:'Interrupted on restart'};
 let token='',engine=null,mode='quick',profile=null,importedText='',selections={},currentJob=null,pollTimer=null,previewTimer=null;
 let variants=[{name:'Alternative 1',text:''}];
 async function api(url,data){const res=await fetch(url,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-SimC-Token':token},body:JSON.stringify(data)});const result=await res.json();if(res.status===401&&result.login){location.href='/login';throw new Error(result.error);}if(!res.ok)throw new Error(result.error||'The request failed.');return result;}
 function notice(message){$('#notice').hidden=!message;$('#notice').textContent=message||'';}
 function safeStore(key,value){try{localStorage.setItem(key,value);}catch{}}
-async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.mode===value));$('#page-title').innerHTML=`${esc(modes[value][0])}<span class="accent">.</span>`;$('#breadcrumb').textContent=modes[value][0];$('#page-description').textContent=modes[value][1];$('#workspace').hidden=['history','wow'].includes(value);$('#history').hidden=value!=='history';$('#wow-panel').hidden=value!=='wow';$('#enchant-panel').hidden=value!=='enchants';$('#compare-panel').hidden=value!=='compare';$('#quick-info').hidden=value!=='quick';$('#talent-panel').hidden=value!=='talents';$('#upgrade-panel').hidden=value!=='upgrades';$('#crest-panel').hidden=value!=='crests';$('#weapon-panel').hidden=value!=='weapons';
+async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.mode===value));$('#page-title').innerHTML=`${esc(modes[value][0])}<span class="accent">.</span>`;$('#breadcrumb').textContent=modes[value][0];$('#page-description').textContent=modes[value][1];$('#workspace').hidden=['history','wow','queue'].includes(value);$('#history').hidden=value!=='history';$('#queue-panel').hidden=value!=='queue';queue.show(value==='queue');$('#wow-panel').hidden=value!=='wow';$('#enchant-panel').hidden=value!=='enchants';$('#compare-panel').hidden=value!=='compare';$('#quick-info').hidden=value!=='quick';$('#talent-panel').hidden=value!=='talents';$('#upgrade-panel').hidden=value!=='upgrades';$('#crest-panel').hidden=value!=='crests';$('#weapon-panel').hidden=value!=='weapons';
   // Weapon Lab runs on SimC's reference profiles, so it hides the character panel and always offers tank settings.
   $('.import-panel').hidden=value==='weapons';tank.forWeapons(value==='weapons');
   if(value==='history')await loadHistory();else if(value==='wow')await wow.refresh();else updateCount();}
@@ -101,7 +102,7 @@ async function loadHistory(){const jobs=await api('/api/jobs');$('#history-list'
 $('#refresh-history').addEventListener('click',()=>loadHistory().catch(e=>notice(e.message)));
 $('#history-list').addEventListener('click',async event=>{const row=event.target.closest('[data-job]');if(row){await setMode(['weapons','crests'].includes(row.dataset.jobMode)?row.dataset.jobMode:'quick');await watchJob(row.dataset.job);$('#results').scrollIntoView({behavior:'smooth'});}});
 async function init(){
-  try{const status=await api('/api/status');token=status.token;engine=status.engine;account.render(status);engineView.render(status);
+  try{const status=await api('/api/status');token=status.token;engine=status.engine;account.render(status);queue.render(status);engineView.render(status);
     $('#wow-version').textContent=engine.installed||'Not found';$('#side-version').textContent=engine.version?`SimulationCraft ${engine.version}`:'Not installed';$('#engine-badge').textContent=engine.compatible&&engine.ready?'Live build verified':engine.ready?'Update SimC for your WoW version':'SimC not installed';$('#engine-badge').classList.toggle('warning',!engine.compatible||!engine.ready);
     // Without an engine only the install screen is useful.
     if(engineView.missing()){$('#workspace').hidden=true;return;}
@@ -125,6 +126,7 @@ const crests=crestUI({api,notice,updateCount});
 const weapons=weaponUI({api,notice,updateCount});
 const engineView=engineUI({api,notice});
 const account=accountUI({api,notice});
+const queue=queueUI({api,notice,openJob:async id=>{await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});}});
 const activity=activityUI({api,openJob:async id=>{if(mode==='history')await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});},onChange:()=>{if(mode==='history')loadHistory().catch(()=>{});}});
 const wow=wowUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});
 armoryUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});

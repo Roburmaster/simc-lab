@@ -21,22 +21,25 @@ import {Updater} from './lib/updater.mjs';
 import {WowAddon} from './lib/wowaddon.mjs';
 import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
 import {importArmory,isArmoryProfile} from './lib/armory.mjs';
-import {Accounts,cookie} from './lib/accounts.mjs';
+import {Accounts,cookie,discordSettings} from './lib/accounts.mjs';
 const port=Number(process.env.PORT || 8642);
 const pkg=JSON.parse(await fs.readFile(new URL('./package.json',import.meta.url),'utf8'));
-// Server mode (SIMC_LAB_SERVER=1) shares one SimC Lab between invited accounts, usually behind a reverse proxy
-// that adds HTTPS. SIMC_LAB_PUBLIC_URL is the address people open; HOST is the interface to listen on.
+// Server mode (SIMC_LAB_SERVER=1) shares one SimC Lab between the members of a Discord server, who sign in with
+// Discord. It usually sits behind a reverse proxy that adds HTTPS. SIMC_LAB_PUBLIC_URL is the address people open; HOST is the interface to listen on.
 const serverMode=!!process.env.SIMC_LAB_SERVER;
 const publicUrl=process.env.SIMC_LAB_PUBLIC_URL?new URL(process.env.SIMC_LAB_PUBLIC_URL):null;
 const listenHost=process.env.HOST||'127.0.0.1';
-const trustProxy=!!process.env.SIMC_LAB_TRUST_PROXY;
 const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicUrl?[publicUrl.host]:[])];
 const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicUrl?[publicUrl.origin]:[])];
-const sessionCookie='simclab_session';
+const sessionCookie='simclab_session',stateCookie='simclab_discord',pendingCookie='simclab_signup';
+const trustProxy=!!process.env.SIMC_LAB_TRUST_PROXY;
+const address=req=>trustProxy&&req.headers['x-forwarded-for']?String(req.headers['x-forwarded-for']).split(',').pop().trim():req.socket.remoteAddress||'';
 const secureCookie=publicUrl?.protocol==='https:';
 const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP,server:serverMode,platform:process.platform};const token=randomBytes(32).toString('hex');
-const accounts=serverMode?await new Accounts().init():null;
+const accounts=serverMode?await new Accounts(discordSettings(process.env,publicUrl)).init():null;
 const limit=(name,fallback)=>{const n=Number(process.env[name]);return Number.isInteger(n)&&n>0?n:fallback;};
+const queueLimits={total:limit('SIMC_LAB_QUEUE',20),perUser:limit('SIMC_LAB_QUEUE_PER_USER',2)};
+if(serverMode)appInfo.queue=queueLimits;
 // Game data is (re)loaded at start and after every engine update. Without an engine the app still starts,
 // so a first run can install SimC from the interface.
 let catalog=null,talentData=null,season=null,loadError=null;
@@ -45,7 +48,7 @@ async function loadData(){
   try{const c=await loadCatalog(source);const t=await loadTalentData(upstreamDir,source);const s=await loadSeason(upstreamDir,c,source);catalog=c;talentData=t;season=s;loadError=null;jobs.catalog=c;}
   catch(e){catalog=talentData=season=null;loadError=e.code==='ENOENT'?'SimC is not installed yet.':e.message;}
 }
-const jobs=serverMode?new Jobs(null,{limit:limit('SIMC_LAB_QUEUE',20),perOwner:limit('SIMC_LAB_QUEUE_PER_USER',2)}):new Jobs(null);await jobs.init();await loadData();
+const jobs=serverMode?new Jobs(null,{limit:queueLimits.total,perOwner:queueLimits.perUser}):new Jobs(null);await jobs.init();await loadData();
 const busy=()=>[...jobs.jobs.values()].some(j=>['queued','running'].includes(j.status));
 const updater=new Updater({busy,onInstalled:loadData});
 // The WoW addon: installed from the copy inside the app, fed through Data.lua, and kept in step on every start.
@@ -66,10 +69,11 @@ if(!serverMode)wow.autoUpdate().catch(e=>console.error('SimCLab addon update fai
 const ready=()=>{if(!catalog)throw new Error(loadError||'SimC is not installed yet. Use Update SimC.');};
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 const armoryBusy=new Set();
-const address=req=>trustProxy&&req.headers['x-forwarded-for']?String(req.headers['x-forwarded-for']).split(',').pop().trim():req.socket.remoteAddress||'';
-function setSession(res,key){
-  res.setHeader('Set-Cookie',`${sessionCookie}=${key?encodeURIComponent(key):''}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${key?30*86400:0}${secureCookie?'; Secure':''}`);
-}
+// Lax, not Strict: the browser arrives from discord.com, and a Strict cookie would be missing on that first page.
+// POSTs still need the per-session token and a matching Origin.
+const setCookie=(name,value,maxAge)=>`${name}=${value?encodeURIComponent(value):''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${value?maxAge:0}${secureCookie?'; Secure':''}`;
+function setSession(res,key){res.setHeader('Set-Cookie',[setCookie(sessionCookie,key,7*86400),setCookie(stateCookie,null),setCookie(pendingCookie,null)]);}
+const toLogin=(res,error)=>{res.writeHead(302,{Location:error?`/login?error=${encodeURIComponent(error)}`:'/'});res.end();};
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>600000)throw new Error('The request is too large.');}return JSON.parse(text);}
 const server=http.createServer(async(req,res)=>{
   try{
@@ -78,12 +82,27 @@ const server=http.createServer(async(req,res)=>{
     let viewer=null,csrf=token;
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
-    if(!route.startsWith('/reports/'))res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' https://wow.zamimg.com https://www.wowhead.com https://nether.wowhead.com; style-src 'self' 'unsafe-inline' https://wow.zamimg.com; img-src 'self' data: https://wow.zamimg.com https://*.wowhead.com; frame-ancestors 'none'; connect-src 'self' https://www.wowhead.com https://nether.wowhead.com https://wow.zamimg.com");
+    if(!route.startsWith('/reports/'))res.setHeader('Content-Security-Policy',`default-src 'self'; script-src 'self' https://wow.zamimg.com https://www.wowhead.com https://nether.wowhead.com; style-src 'self' 'unsafe-inline' https://wow.zamimg.com; img-src 'self' data: https://wow.zamimg.com https://*.wowhead.com${serverMode?' https://cdn.discordapp.com':''}; frame-ancestors 'none'; connect-src 'self' https://www.wowhead.com https://nether.wowhead.com https://wow.zamimg.com`);
     if(req.method==='POST'&&req.headers.origin&&!origins.includes(req.headers.origin))return json(res,403,{error:'Invalid origin.'});
     if(serverMode){
-      // Signing in and registering come before a session exists; everything else under /api needs one.
-      if(req.method==='POST'&&route==='/api/auth/login'){if(!req.headers.origin)return json(res,403,{error:'Invalid origin.'});const {key,user}=await accounts.login(await body(req),address(req));setSession(res,key);return json(res,200,{user});}
-      if(req.method==='POST'&&route==='/api/auth/register'){if(!req.headers.origin)return json(res,403,{error:'Invalid origin.'});const {key,user}=await accounts.register(await body(req));setSession(res,key);return json(res,200,{user});}
+      // Signing in with Discord comes before a session exists; everything else under /api needs one.
+      if(req.method==='GET'&&route==='/auth/discord'){const {state,url:to}=accounts.begin();res.writeHead(302,{Location:to,'Set-Cookie':setCookie(stateCookie,state,600)});return res.end();}
+      if(req.method==='GET'&&route==='/auth/discord/callback'){
+        if(url.searchParams.get('error'))return toLogin(res,url.searchParams.get('error')==='access_denied'?'Sign-in was cancelled on Discord.':'Discord could not sign you in. Try again.');
+        try{
+          const result=await accounts.finish({code:url.searchParams.get('code'),state:url.searchParams.get('state'),cookieState:cookie(req,stateCookie)});
+          // Someone new: the invite key comes next, on the sign-in page.
+          if(result.pending){res.writeHead(302,{Location:'/login?invite=1','Set-Cookie':[setCookie(stateCookie,null),setCookie(pendingCookie,result.pending,900)]});return res.end();}
+          setSession(res,result.key);return toLogin(res,null);
+        }
+        catch(e){res.setHeader('Set-Cookie',setCookie(stateCookie,null));return toLogin(res,e.message);}
+      }
+      if(req.method==='GET'&&route==='/api/auth/pending')return json(res,200,{name:accounts.pendingName(cookie(req,pendingCookie))});
+      if(req.method==='POST'&&route==='/api/auth/invite'){
+        if(!req.headers.origin)return json(res,403,{error:'Invalid origin.'});
+        const {key:inviteKey}=await body(req);const {key}=await accounts.redeem({pending:cookie(req,pendingCookie),key:inviteKey},address(req));
+        setSession(res,key);return json(res,200,{});
+      }
       const session=accounts.session(cookie(req,sessionCookie));
       if(session){viewer=session.user;csrf=session.csrf;}
       else if(route==='/'){res.writeHead(302,{Location:'/login'});return res.end();}
@@ -97,9 +116,11 @@ const server=http.createServer(async(req,res)=>{
     const admin=()=>{if(serverMode&&!viewer?.admin)throw Object.assign(new Error('Only an admin can do that.'),{status:403});};
     if(serverMode){
       if(req.method==='POST'&&route==='/api/auth/logout'){await accounts.logout(cookie(req,sessionCookie));setSession(res,null);return json(res,200,{});}
-      if(req.method==='POST'&&route==='/api/auth/password'){const {key,user}=await accounts.changePassword(viewer,await body(req));setSession(res,key);return json(res,200,{user});}
-      if(req.method==='GET'&&route==='/api/admin/users'){admin();return json(res,200,{users:accounts.list(),invites:accounts.pendingInvites()});}
-      if(req.method==='POST'&&route==='/api/admin/invite'){admin();const {admin:asAdmin}=await body(req);const invite=await accounts.invite({admin:!!asAdmin,by:viewer.id});return json(res,200,{...invite,link:`${publicUrl?.origin||req.headers.origin||''}/login#invite=${invite.code}`});}
+      if(req.method==='GET'&&route==='/api/admin/users'){admin();return json(res,200,{users:accounts.list(),blocked:accounts.blockedCount()});}
+      if(req.method==='GET'&&route==='/api/admin/keys'){admin();return json(res,200,{keys:accounts.keys()});}
+      if(req.method==='POST'&&route==='/api/admin/keys'){admin();const {key,label}=await body(req);return json(res,200,{keys:await accounts.addKey(key,label)});}
+      if(req.method==='POST'&&route==='/api/admin/keys/remove'){admin();const {id}=await body(req);return json(res,200,{keys:await accounts.removeKey(String(id))});}
+      if(req.method==='POST'&&route==='/api/admin/unblock'){admin();await accounts.unblockAll();return json(res,200,{users:accounts.list(),blocked:0});}
       if(req.method==='POST'&&route==='/api/admin/remove'){admin();const {id}=await body(req);return json(res,200,{users:await accounts.remove(String(id),viewer)});}
       if(req.method==='POST'&&route==='/api/admin/role'){admin();const {id,admin:asAdmin}=await body(req);return json(res,200,{users:await accounts.setAdmin(String(id),!!asAdmin,viewer)});}
       // The game is on each player's own PC, so the WoW addon bridge does not exist on a server.
@@ -157,7 +178,8 @@ const server=http.createServer(async(req,res)=>{
       return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request,viewer?.id||null)));}
-    if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs(me));
+    // Who is waiting is shown by display name, so members can see whose turn it is; their characters stay private.
+    if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs(me).map(({owner,...j})=>({...j,by:serverMode?(accounts.user(owner)?.name||'Removed member'):null})));
     if(req.method==='GET'&&route==='/api/jobs')return json(res,200,[...jobs.jobs.values()].reverse().filter(j=>jobs.visible(j,me)).map(j=>({id:j.id,name:j.name,mode:j.mode,status:j.status,created:j.created,done:j.done,total:j.total,fraction:jobFraction(j)})));
     const jobRoute=route.match(/^\/api\/jobs\/([\da-f-]{36})(\/cancel)?$/);
     if(jobRoute){const job=jobs.jobs.get(jobRoute[1]);if(!job||!jobs.visible(job,me))return json(res,404,{error:'Job not found.'});if(req.method==='POST'&&jobRoute[2])return json(res,200,await jobs.cancel(job.id));if(req.method==='GET'&&!jobRoute[2])return json(res,200,{...jobs.public(job),queue:jobs.queueFor(job,me),fraction:jobFraction(job)});}
@@ -191,16 +213,14 @@ const server=http.createServer(async(req,res)=>{
       // Reports are generated by SimC. Serve downloads so their scripts never share this app's origin.
       res.writeHead(200,{'Content-Type':ext==='.json'?'application/json':'application/octet-stream','Content-Disposition':`attachment; filename="${report[2]}"`});return res.end(data);
     }
-    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css','/account.js':'account.js',...(serverMode?{'/login':'login.html','/login.js':'login.js'}:{})};
+    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css','/account.js':'account.js','/queue.js':'queue.js',...(serverMode?{'/login':'login.html','/login.js':'login.js'}:{})};
     if(req.method==='GET'&&assets[route]){const file=assets[route];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(await fs.readFile(path.join(root,'public',file)));}
     json(res,404,{error:'Not found.'});
   }catch(e){json(res,e.status||(e.code==='ENOENT'?404:400),{error:e.message});}
 });
 server.listen(port,listenHost,async()=>{
   console.log(`SimC Lab${serverMode?' server':''}: http://${listenHost}:${port}${publicUrl?` (public address ${publicUrl.origin})`:''}`);
-  if(!serverMode)return;
-  const invite=await accounts.bootstrap();
-  if(invite)console.log(`No accounts yet. Create the first admin account within 7 days:\n  ${publicUrl?.origin||`http://127.0.0.1:${port}`}/login#invite=${invite.code}`);
+  if(serverMode)console.log(`Sign in with Discord at ${publicUrl.origin}/login`);
 });
 // SIMC_LAB_AUTO_UPDATE keeps an unattended server on the live WoW build: a minute after start and then every six
 // hours, SimC and game data are updated when something new is out and no simulation is waiting.

@@ -1,24 +1,24 @@
-// Sign-in page of a SimC Lab server. An invite link (/login#invite=…) turns it into the form that makes an account.
+// Sign-in page of a SimC Lab server: the Discord button, why the last sign-in failed, and the invite key that
+// someone new enters after Discord has said who they are.
 const $=s=>document.querySelector(s);
-const invite=new URLSearchParams(location.hash.slice(1)).get('invite');
-if(invite){
-  $('#login-title').textContent='Create your account';
-  $('#login-help').textContent='Choose a name and a password of at least 10 characters. The invite link works once.';
-  $('#login-password').autocomplete='new-password';$('#login-password').minLength=10;
-  $('#login-confirm-row').hidden=false;$('#login-confirm').required=true;
-  $('#login-submit').firstChild.textContent='Create account ';
+const params=new URLSearchParams(location.search);
+const error=params.get('error');
+if(error){$('#login-error').hidden=false;$('#login-error').textContent=error;history.replaceState(null,'','/login');}
+
+if(params.has('invite')){
+  const {name}=await fetch('/api/auth/pending').then(r=>r.json()).catch(()=>({name:null}));
+  if(name){
+    $('#login-start').hidden=true;$('#invite-form').hidden=false;
+    $('#invite-help').textContent=`Welcome, ${name}! Enter the invite key you were given to join. You only need it once.`;
+    $('#invite-key').focus();
+  }else history.replaceState(null,'','/login');
 }
-function fail(message){$('#login-error').hidden=false;$('#login-error').textContent=message;}
-$('#login-form').addEventListener('submit',async event=>{
-  event.preventDefault();$('#login-error').hidden=true;
-  const name=$('#login-name').value.trim(),password=$('#login-password').value;
-  if(invite&&password!==$('#login-confirm').value)return fail('The passwords differ.');
-  $('#login-submit').disabled=true;
+$('#invite-form').addEventListener('submit',async event=>{
+  event.preventDefault();$('#invite-error').hidden=true;$('#invite-submit').disabled=true;
   try{
-    const res=await fetch(invite?'/api/auth/register':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(invite?{invite,name,password}:{name,password})});
-    const result=await res.json();if(!res.ok)throw new Error(result.error||'Signing in failed.');
-    // The invite is spent; drop it from the address before leaving.
-    history.replaceState(null,'','/login');location.href='/';
-  }catch(e){fail(e.message);}
-  finally{$('#login-submit').disabled=false;}
+    const res=await fetch('/api/auth/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('#invite-key').value})});
+    const result=await res.json();if(!res.ok)throw new Error(result.error||'That did not work.');
+    location.href='/';
+  }catch(e){$('#invite-error').hidden=false;$('#invite-error').textContent=e.message;if(/expired|Sign in with Discord again/.test(e.message))setTimeout(()=>location.href='/login',2500);}
+  finally{$('#invite-submit').disabled=false;}
 });

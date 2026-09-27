@@ -1,5 +1,7 @@
-# SimC Lab server as a systemd service, for running without Docker. install-ubuntu.sh puts the app in
-# /opt/simc-lab and this file in /etc/systemd/system; settings go in /etc/simc-lab.env.
+# SimC Lab server as a systemd service. install-ubuntu.sh puts the app in /opt/simc-lab and this file in
+# /etc/systemd/system; plain settings go in /etc/simc-lab.env. The two secrets (the Discord client secret and
+# the key that encrypts the account store) are systemd credentials, encrypted with the machine's own key
+# (systemd-creds), so neither is ever on disk in clear text: set-secret.sh writes them.
 [Unit]
 Description=SimC Lab server
 After=network-online.target
@@ -12,6 +14,9 @@ Group=simclab
 WorkingDirectory=/opt/simc-lab
 Environment=NODE_ENV=production SIMC_LAB_SERVER=1 SIMC_LAB_HOME=/var/lib/simc-lab HOST=127.0.0.1 PORT=8642
 EnvironmentFile=-/etc/simc-lab.env
+LoadCredentialEncrypted=discord-client-secret:/etc/simc-lab/discord-client-secret.cred
+LoadCredentialEncrypted=data-key:/etc/simc-lab/data-key.cred
+Environment=DISCORD_CLIENT_SECRET_FILE=%d/discord-client-secret SIMC_LAB_DATA_KEY_FILE=%d/data-key
 ExecStart=/usr/bin/node /opt/simc-lab/server.mjs
 Restart=on-failure
 RestartSec=5
