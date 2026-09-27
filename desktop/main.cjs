@@ -1,5 +1,6 @@
 // SimC Lab desktop shell: starts the local server with Electron's own Node, shows it in a window and keeps the
-// app itself up to date. The engine, game data and runs live in %LOCALAPPDATA%\SimC Lab, outside the install.
+// app itself up to date. The engine, game data and runs live outside the install: %LOCALAPPDATA%\SimC Lab on
+// Windows, $XDG_DATA_HOME/simc-lab (usually ~/.local/share/simc-lab) on Linux.
 const {app,BrowserWindow,shell,ipcMain,dialog,Menu}=require('electron');
 const {autoUpdater}=require('electron-updater');
 const path=require('node:path');
@@ -7,7 +8,8 @@ const fs=require('node:fs');
 const net=require('node:net');
 const {spawn,execFile}=require('node:child_process');
 
-const home=path.join(process.env.LOCALAPPDATA||app.getPath('userData'),'SimC Lab');
+const windows=process.platform==='win32';
+const home=windows?path.join(process.env.LOCALAPPDATA||app.getPath('userData'),'SimC Lab'):path.join(process.env.XDG_DATA_HOME||path.join(app.getPath('home'),'.local','share'),'simc-lab');
 const serverDir=app.isPackaged?path.join(process.resourcesPath,'server'):path.resolve(__dirname,'..');
 let server=null,port=0,win=null,quitting=false;
 
@@ -20,7 +22,8 @@ async function startServer(){
   fs.mkdirSync(path.join(home,'logs'),{recursive:true});
   port=await freePort();
   const log=fs.openSync(path.join(home,'logs','server.log'),'a');
-  server=spawn(process.execPath,[path.join(serverDir,'server.mjs')],{cwd:serverDir,windowsHide:true,stdio:['ignore',log,log],
+  // On Linux the server leads its own process group, so stopping it also stops a running SimC.
+  server=spawn(process.execPath,[path.join(serverDir,'server.mjs')],{cwd:serverDir,windowsHide:true,detached:!windows,stdio:['ignore',log,log],
     env:{...process.env,ELECTRON_RUN_AS_NODE:'1',PORT:String(port),SIMC_LAB_HOME:home,SIMC_LAB_DESKTOP:'1'}});
   server.on('exit',code=>{server=null;if(!quitting){dialog.showErrorBox('SimC Lab stopped',`The local server stopped (code ${code}). See ${path.join(home,'logs','server.log')}.`);app.quit();}});
   for(let i=0;i<150;i++){
@@ -34,6 +37,7 @@ async function startServer(){
 function stopServer(){
   if(!server)return Promise.resolve();
   const pid=server.pid;quitting=true;
+  if(!windows){try{process.kill(-pid,'SIGKILL');}catch{}return Promise.resolve();}
   return new Promise(resolve=>execFile('taskkill',['/pid',String(pid),'/T','/F'],{windowsHide:true},()=>resolve()));
 }
 

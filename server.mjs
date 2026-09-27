@@ -23,7 +23,7 @@ import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
 import {importArmory,isArmoryProfile} from './lib/armory.mjs';
 const port=Number(process.env.PORT || 8642);
 const pkg=JSON.parse(await fs.readFile(new URL('./package.json',import.meta.url),'utf8'));
-const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP};const token=randomBytes(32).toString('hex');
+const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP,platform:process.platform};const token=randomBytes(32).toString('hex');
 // Game data is (re)loaded at start and after every engine update. Without an engine the app still starts,
 // so a first run can install SimC from the interface.
 let catalog=null,talentData=null,season=null,loadError=null;
