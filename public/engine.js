@@ -13,12 +13,14 @@ export function engineUI({api,notice}){
 
   function render(s){
     status=s;const e=s.engine;
+    const linux=s.app?.platform&&s.app.platform!=='win32';
+    if(linux)$('#setup-panel p').textContent='SimC Lab needs the SimulationCraft engine and current game data. On Linux SimC is built from source (20–40 minutes the first time); Git, CMake, a C++ compiler and libcurl must be installed, and the en_US.UTF-8 locale (Ubuntu: sudo apt install git cmake build-essential libcurl4-openssl-dev && sudo locale-gen en_US.UTF-8).';
     $('#engine-detail').innerHTML=`<p>Installed WoW<br><strong>${esc(e.installed||'Not found')}</strong></p>
       <p>SimulationCraft<br><strong>${esc(e.version||'Not installed')}</strong>${e.wowVersion?` · WoW ${esc(e.wowVersion)}`:''}<br>${esc(kinds[e.source]||'Built from source')}${e.commitDate?` · ${when(e.commitDate)}`:''}</p>
       <p>Commit<br><code>${esc(e.commit||'—')}</code></p>
       <div class="engine-actions"><button class="button small primary" data-update="auto">Update SimC</button><button class="button small secondary" data-check>Check for updates</button></div>
       <div id="engine-check" class="hint"></div><div class="update-progress" data-progress></div>
-      <details><summary>Advanced</summary><p class="hint">Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.</p><div class="engine-actions"><button class="button small secondary" data-update="source">Build from source</button><button class="button small secondary" data-update="data">Refresh game data only</button></div></details>
+      <details><summary>Advanced</summary><p class="hint">${linux?'Build from source downloads the SimC source and compiles it with the system’s Git, CMake and C++ compiler. It needs about 8 GB and takes 20–40 minutes; SIMC_LAB_BUILD_JOBS limits the compiler jobs on a small machine.':'Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.'}</p><div class="engine-actions"><button class="button small secondary" data-update="source">Build from source</button><button class="button small secondary" data-update="data">Refresh game data only</button></div></details>
       ${desktop?`<div class="divider"></div><p>SimC Lab<br><strong>${esc(s.app?.version||'')}</strong></p><div class="engine-actions"><button class="button small secondary" data-app-check>Check for app updates</button><button class="button small primary" data-app-install hidden>Restart and update</button></div><div class="hint" id="app-update"></div>`:''}`;
     const missing=!e.ready||!!s.loadError;
     $('#setup-panel').hidden=!missing;
