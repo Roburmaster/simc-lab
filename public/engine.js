@@ -15,7 +15,7 @@ export function engineUI({api,notice}){
     status=s;const e=s.engine;
     const linux=s.app?.platform&&s.app.platform!=='win32',member=s.app?.server&&!s.user?.admin;
     if(member)$('#setup-panel').innerHTML='<div class="info-symbol">⇪</div><div><h2>SimulationCraft is not installed yet</h2><p>An admin of this server installs and updates SimC. Try again later.</p></div>';
-    else if(linux)$('#setup-panel p').textContent='SimC Lab needs the SimulationCraft engine and current game data. On Linux SimC is built from source (20–40 minutes the first time); Git, CMake, a C++ compiler and libcurl must be installed (Ubuntu: sudo apt install git cmake build-essential libcurl4-openssl-dev).';
+    else if(linux)$('#setup-panel p').textContent='SimC Lab needs the SimulationCraft engine and current game data. On Linux SimC is built from source (20–40 minutes the first time); Git, CMake, a C++ compiler and libcurl must be installed, and the en_US.UTF-8 locale (Ubuntu: sudo apt install git cmake build-essential libcurl4-openssl-dev && sudo locale-gen en_US.UTF-8).';
     $('#engine-detail').innerHTML=`<p>Installed WoW<br><strong>${esc(e.installed||'Not found')}</strong></p>
       <p>SimulationCraft<br><strong>${esc(e.version||'Not installed')}</strong>${e.wowVersion?` · WoW ${esc(e.wowVersion)}`:''}<br>${esc(kinds[e.source]||'Built from source')}${e.commitDate?` · ${when(e.commitDate)}`:''}</p>
       <p>Commit<br><code>${esc(e.commit||'—')}</code></p>

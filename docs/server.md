@@ -11,7 +11,7 @@ Server mode is switched on with `SIMC_LAB_SERVER=1`. Compared with the desktop a
 - **A fair queue.** Simulations still run one at a time, but the next job goes to whoever has waited longest, so one person's five Weapon Lab runs do not hold everyone else up. Each account may have 2 jobs waiting (`SIMC_LAB_QUEUE_PER_USER`), and the server 20 in total (`SIMC_LAB_QUEUE`).
 - **Admins run the engine.** Only admins can update SimC or the game data. With `SIMC_LAB_AUTO_UPDATE=1` the server does it by itself: a minute after start and every six hours, when WoW or SimC has moved on and no simulation is waiting.
 - **No WoW addon.** The game runs on each player's own PC, so the WoW addon page is hidden and its endpoints are off. Players paste their `/simc` export or use the Armory import.
-- **SimC is built from source.** Official SimC nightly builds exist only for Windows, so the server compiles SimC itself (20–40 minutes the first time, with networking on so the Armory import works).
+- **SimC is built from source.** Official SimC nightly builds exist only for Windows, so the server compiles SimC itself (20–40 minutes the first time, with networking on so the Armory import works). SimC writes its HTML reports under the `en_US.UTF-8` locale; the Docker image and the install script generate it.
 
 Passwords are stored as scrypt hashes, sessions as SHA-256 hashes of a random cookie (HttpOnly, SameSite=Strict, Secure behind HTTPS). Ten wrong passwords for a name or from an address lock sign-in for 15 minutes. Everything is kept in `$SIMC_LAB_HOME/server/accounts.json`.
 
@@ -73,7 +73,7 @@ simc.example.com {
 
 ## Sizing
 
-SimC uses every CPU thread a job asks for, up to all but two of the machine's. A 4-core VPS with 8 GB of memory works; the first SimC build needs about 8 GB of disk and, with `SIMC_LAB_BUILD_JOBS=2`, about 3 GB of memory. More cores make simulations faster for everyone.
+SimC uses every CPU thread a job asks for, up to all of the server's (a desktop keeps two free). A 4-core VPS with 8 GB of memory works; the first SimC build needs about 8 GB of disk and, with `SIMC_LAB_BUILD_JOBS=2`, about 3 GB of memory. More cores make simulations faster for everyone.
 
 ## Lost the last admin?
 

@@ -13,9 +13,11 @@ if [ "$node_major" -lt 22 ]; then
   exit 1
 fi
 
-# Git, CMake, a C++ compiler and libcurl build SimC from the web interface later.
+# Git, CMake, a C++ compiler and libcurl build SimC from the web interface later. SimC writes its HTML reports
+# (and the Armory import reads one) under the en_US.UTF-8 locale.
 apt-get update
-apt-get install -y --no-install-recommends git cmake build-essential libcurl4-openssl-dev ca-certificates
+apt-get install -y --no-install-recommends git cmake build-essential libcurl4-openssl-dev ca-certificates locales
+locale-gen en_US.UTF-8
 
 id simclab >/dev/null 2>&1 || useradd --system --home-dir /var/lib/simc-lab --shell /usr/sbin/nologin simclab
 install -d -o simclab -g simclab -m 750 /var/lib/simc-lab

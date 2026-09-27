@@ -1,10 +1,12 @@
 # SimC Lab server. The image holds the app and the tools to build SimulationCraft; SimC itself is compiled into
 # the /data volume from the web interface (or automatically with SIMC_LAB_AUTO_UPDATE=1), so a WoW patch never
-# needs a new image. See docs/server.md.
+# needs a new image. SimC writes its HTML reports (and the Armory import reads one) under en_US.UTF-8, so the
+# image generates that locale. See docs/server.md.
 FROM node:24-bookworm-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git cmake build-essential libcurl4-openssl-dev ca-certificates tini \
+ && apt-get install -y --no-install-recommends git cmake build-essential libcurl4-openssl-dev ca-certificates tini locales \
+ && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

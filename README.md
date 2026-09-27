@@ -6,7 +6,7 @@ A SimulationCraft workbench for Windows and Linux: Quick Sim, Enchant Lab, Gear 
 
 The installer is not code-signed yet, so Windows SmartScreen may warn on first install: choose More info, then Run anyway. On first start, press Install SimC.
 
-On Linux, make the AppImage executable (`chmod +x SimC-Lab.AppImage`) or install the .deb (`sudo apt install ./simc-lab_amd64.deb`). SimC is built from source there, so install the build tools first: `sudo apt install git cmake build-essential libcurl4-openssl-dev`.
+On Linux, make the AppImage executable (`chmod +x SimC-Lab.AppImage`) or install the .deb (`sudo apt install ./simc-lab_amd64.deb`). SimC is built from source there, so install the build tools first: `sudo apt install git cmake build-essential libcurl4-openssl-dev`, and make sure the `en_US.UTF-8` locale exists (`sudo locale-gen en_US.UTF-8`); SimC writes its HTML reports under it.
 
 **Server:** SimC Lab also runs on a Linux server shared by friends or a guild, with invite-only accounts and a fair queue. See [docs/server.md](docs/server.md).
 
