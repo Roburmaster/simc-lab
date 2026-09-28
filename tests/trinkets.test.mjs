@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {withoutTrinkets,levelSteps,trinketCandidates,selectTopTrinkets,gainOf,specSteps,trinketCount,topRows} from '../lib/trinkets.mjs';
+import {vaultLevel,withVault,withoutTrinkets,levelSteps,trinketCandidates,selectTopTrinkets,gainOf,specSteps,trinketCount,topRows} from '../lib/trinkets.mjs';
 import {dropLevels,rankWeaponRows} from '../lib/weapons.mjs';
 
 const track=(id,name,base,bonus)=>({id,name,levels:[1,2,3].map(level=>({level,max:3,bonusId:bonus+level,itemLevel:base+3*level}))});
@@ -67,6 +67,22 @@ test('a trinket that completes a set with the reference gear is marked',()=>{
   const list=trinketCandidates(arms,season,catalog,{drops,steps});
   assert.equal(list.find(c=>c.name==='Technique').set.name,"Bite of Zul'jan");
   assert.equal(list.find(c=>c.name==='Idol').set,undefined);
+});
+
+test('the Great Vault takes a dungeon trinket to the Myth track, and the chest level stays a step',()=>{
+  const vault=vaultLevel(season);
+  assert.equal(vault.label,'Great Vault · Myth 3/3');assert.equal(vault.itemLevel,327);
+  const vaulted=withVault(dropLevels(season,{craftedCap:331}),vault);
+  const list=trinketCandidates(arms,season,catalog,{drops:vaulted.of,steps});
+  const flask=list.filter(c=>c.name==='Flask');
+  assert.deepEqual(flask.map(c=>c.itemLevel),[299,314,327]);
+  assert.equal(flask.at(-1).levelLabel,'Great Vault · Myth 3/3');
+  assert.match(flask.at(-1).line,/bonus_id=12803$/);
+  assert.deepEqual(list.filter(c=>c.name==='Idol').map(c=>c.itemLevel),[299,314,327],'raid is unchanged');
+  assert.equal(vaulted.public.vault.itemLevel,327);
+  assert.equal(vaultLevel(season,false),null);
+  assert.equal(withVault(dropLevels(season,{}),null).public.vault,undefined);
+  assert.equal(vaultLevel(season,{track:617,level:2}).itemLevel,311,'a lower vault choice');
 });
 
 test('equal footing shows every trinket at every step',()=>{
