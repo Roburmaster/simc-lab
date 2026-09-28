@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {weaponCandidates,prepareWeapons,selectTop,rankWeaponRows,loadReferenceSpecs,clearReferenceCache,weaponSteps,actorGear,dropLevels,craftedItemLevel} from '../lib/weapons.mjs';
+import {weaponCandidates,prepareWeapons,selectTop,rankWeaponRows,loadReferenceSpecs,clearReferenceCache,weaponSteps,actorGear,dropLevels,craftedItemLevel,bestPair,profilePair,withPair,simulatedCount} from '../lib/weapons.mjs';
 
 const weaponSpecs=[{itemClass:2,itemSubClass:1,specsCanUse:[71,72,73]},{itemClass:2,itemSubClass:7,specsCanUse:[72,73]},{itemClass:2,itemSubClass:15,specsCanUse:[73]}];
 const items=new Map([[10,{inventoryType:17,itemClass:2}],[11,{inventoryType:13,itemClass:2}],[12,{inventoryType:14,itemClass:4}]]);
@@ -15,7 +15,7 @@ const myth={id:618,name:'Myth',levels:[1,2,3].map(level=>({level,max:3,bonusId:1
 myth.finalDrop={bonusId:13999,itemLevel:344};
 const track=myth;
 const weapon=(id,name,inventoryType,itemSubClass=1,extra={})=>({id,name,itemClass:2,itemSubClass,inventoryType,stats:[{id:4}],...extra});
-const craftedStats=[{bonusId:8790,name:'Critical Strike / Haste'},{bonusId:8791,name:'Critical Strike / Mastery'}];
+const craftedStats=[{bonusId:8790,stats:[32,36],name:'Critical Strike / Haste'},{bonusId:8791,stats:[32,49],name:'Critical Strike / Mastery'}];
 const season={
   season:{id:2,name:'Season 2'},tracks:[hero,myth],difficulties:[{name:'Heroic',track:617},{name:'Mythic',track:618}],weaponSpecs,bonusSockets:{},craftedStats,
   entries:[
@@ -270,7 +270,9 @@ test('a plan counts its runs and refuses a selection that cannot be simulated',a
   const plan=await prepareWeapons(request,catalog,season,talentData,dir,1);
   // Arms: two dropped two-handers and the crafted one in both stat pairs. Protection: two one-handers and a shield.
   assert.deepEqual(plan.specs.map(s=>[s.key,s.candidates.length]),[['warrior-arms',4],['warrior-protection',3]]);
-  assert.equal(plan.candidates,7);
+  // The crafted one is simulated in one pair only, the one Arms' own stat weights choose.
+  assert.equal(simulatedCount(plan.specs[0]),3);
+  assert.equal(plan.candidates,6);
   assert.deepEqual(plan.craftedStats.map(s=>s.bonusId),[8790,8791]);
   // Without a choice each source keeps to what it can give: the raid to the Myth track, the rest to Hero.
   assert.equal(plan.sources.equal,false);
@@ -280,9 +282,9 @@ test('a plan counts its runs and refuses a selection that cannot be simulated',a
   assert.deepEqual(plan.levels,{min:320,max:344});
   assert.ok(plan.specs[1].tank,'a tank specialization gets tank settings');
   assert.equal(plan.specs[0].tank,null);
-  // One profileset run per spec, plus one calibration for the tank: nothing is screened at this size.
-  assert.equal(weaponSteps(plan,1),3);
-  assert.equal(weaponSteps({...plan,finalists:1},2),9,'screening and a final round for both specs in both scenarios, plus one calibration');
+  // One profileset run per spec, one stat weight run for Arms' crafted pair, and one calibration for the tank.
+  assert.equal(weaponSteps(plan,1),4);
+  assert.equal(weaponSteps({...plan,finalists:1},2),11,'screening and a final round for both specs in both scenarios, the Arms stat weights in each, plus one calibration');
   await assert.rejects(prepareWeapons({weapons:{specs:['warrior-arms'],kinds:['held']}},catalog,season,talentData,dir,1),/No selected specialization/);
   await assert.rejects(prepareWeapons({weapons:{kinds:['nonsense']}},catalog,season,talentData,dir,1),/weapon category/);
   await assert.rejects(prepareWeapons({weapons:{equal:true,track:track.id,level:9}},catalog,season,talentData,dir,1),/upgrade track and level/);
@@ -323,4 +325,20 @@ test('a set weapon is ranked ahead but the rest of the hand is tiered without it
   assert.equal(ranked[0].behind.toFixed(2),'-7.00','the set weapon\'s lead over the best without one');
   assert.equal(ranked[1].behindFirst.toFixed(2),'6.54','and the plain distance to rank 1 is kept');
   assert.deepEqual(ranked.map(r=>r.set),[true,false,false,false]);
+});
+
+test('every crafted weapon of a spec takes the pair its stat weights rank highest',()=>{
+  const pairs=[{bonusId:1,stats:[32,36],name:'Critical Strike / Haste'},{bonusId:2,stats:[32,49],name:'Critical Strike / Mastery'},{bonusId:3,stats:[36,40],name:'Haste / Versatility'}];
+  // Havoc's weights from a real run: Crit > Mastery > Haste > Vers.
+  assert.equal(bestPair({Crit:51.2,Haste:39.0,Mastery:45.0,Vers:37.6},pairs).bonusId,2);
+  assert.equal(bestPair({Crit:10,Haste:60,Mastery:1,Vers:55},pairs).bonusId,3);
+  assert.equal(bestPair({},pairs),null,'no weights, no choice');
+  assert.equal(bestPair(null,pairs),null);
+  // Without weights, the pair the profile's own crafted gear wears, in either order; else the first one offered.
+  assert.equal(profilePair('main_hand=x,crafted_stats=49/32',pairs).bonusId,2);
+  assert.equal(profilePair('main_hand=x,crafted_stats=40/49\nwrist=y,crafted_stats=40/36',pairs).bonusId,3);
+  assert.equal(profilePair('main_hand=x',pairs).bonusId,1);
+  const spec={candidates:[{key:'a'},{key:'b',craftedBonus:1},{key:'c',craftedBonus:2},{key:'d',craftedBonus:3}]};
+  assert.deepEqual(withPair(spec,pairs[1]).map(c=>c.key),['a','c']);
+  assert.equal(simulatedCount(spec),2);
 });

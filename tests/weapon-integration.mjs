@@ -31,13 +31,19 @@ assert.equal(result.done,result.total);
 for(const spec of result.weapons.specs){
   const byKey=new Map(spec.candidates.map(c=>[c.key,c]));
   const rows=result.results.filter(r=>r.spec===spec.key&&!r.superseded&&Number.isFinite(r.rank)).sort((a,b)=>a.rank-b.rank);
-  // Crafted weapons run in every stat pair but are ranked once, so the list is one row per item, not per candidate.
+  // Crafted weapons are prepared in every stat pair but run in one, so the list is one row per item, not per candidate.
   const items=new Set(spec.candidates.map(c=>`${c.slot}|${c.itemId}`));
   assert.equal(rows.length,items.size,`${spec.key}: every item is ranked once`);
   const crafted=spec.candidates.filter(c=>c.craftedStat);
   assert.ok(crafted.length>=2,`${spec.key}: crafted weapons are in the pool`);
   assert.ok(rows.some(r=>byKey.get(r.key)?.craftedStat),`${spec.key}: a crafted weapon reached the ranking`);
-  assert.ok(result.results.some(r=>r.spec===spec.key&&r.variant),`${spec.key}: the weaker stat pairs are marked as variants`);
+  // Every crafted weapon carries the one pair the spec's stat weights chose.
+  const weights=result.stages.find(st=>st.spec===spec.key&&st.stage===5);
+  assert.equal(weights?.status,'complete',`${spec.key}: the stat weights were read`);
+  assert.ok(weights.weights.Crit>0&&weights.pair,`${spec.key}: a pair was chosen from real weights`);
+  assert.equal(spec.crafted?.[0]?.pair,weights.pair);
+  const pairs=new Set(rows.map(r=>byKey.get(r.key)).filter(c=>c?.craftedStat).map(c=>c.craftedStat));
+  assert.deepEqual([...pairs],[weights.pair],`${spec.key}: all crafted weapons share one pair`);
   assert.ok(rows.every(r=>'SABCD'.includes(r.tier)),`${spec.key}: every row has a tier`);
   assert.ok(rows.every(r=>spec.candidates.some(c=>c.key===r.key)),`${spec.key}: every row belongs to a candidate`);
   assert.ok(rows.some(r=>!r.screened),`${spec.key}: the final round replaced its screening rows`);
@@ -48,7 +54,8 @@ for(const spec of result.weapons.specs){
     const hand=rows.filter(r=>byKey.get(r.key)?.slot===slot);
     assert.ok(hand.length,`${spec.key}: ${slot} has a list`);
     assert.equal(hand[0].rank,1,`${spec.key}: ${slot} starts at rank 1`);
-    assert.equal(hand[0].behind,0,`${spec.key}: ${slot} is measured from its own best`);
+    // A weapon that completes a set leads by its bonus; the hand is measured from the best without one.
+    assert.equal(hand.find(r=>!r.set).behind,0,`${spec.key}: ${slot} is measured from its own best without a set`);
     assert.ok(hand.every((r,i)=>r.rank===i+1),`${spec.key}: ${slot} ranks are a sequence`);
     // Both hands reach the full round; neither is left with screening numbers alone.
     assert.ok(hand.some(r=>!r.screened),`${spec.key}: ${slot} had candidates in the final round`);
@@ -75,8 +82,9 @@ for(const spec of result.weapons.specs){
 }
 assert.match(html,/wowhead\.com\/item=\d+\?bonus=/);
 assert.equal((await fetch(`${base}/tier-list/00000000-0000-0000-0000-000000000000.html`)).status,404);
-const input=await(await fetch(`${base}/reports/${job.id}/${stages[0].stem}.simc`)).text();
-assert.match(input,/profileset\."w001"=(main_hand|off_hand)=,id=\d+,bonus_id=/);
+assert.match(html,/Every crafted weapon carries (Critical Strike|Haste|Mastery|Versatility) \//,'the page names the crafted pair');
+const input=await(await fetch(`${base}/reports/${job.id}/${stages.find(s=>s.stage===1).stem}.simc`)).text();
+assert.match(input,/profileset\."w\d{3}"=(main_hand|off_hand)=,id=\d+,bonus_id=/);
 // A delve weapon is never simulated above the level its own track can reach.
 for(const spec of result.weapons.specs)for(const c of spec.candidates.filter(c=>c.sources.some(s=>s.startsWith('Delves'))))
   assert.ok(c.itemLevel<=src.delves.itemLevel,`${c.name} from delves at ${c.itemLevel}, cap ${src.delves.itemLevel}`);
