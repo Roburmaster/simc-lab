@@ -1,6 +1,6 @@
 # SimC Lab
 
-A SimulationCraft workbench for Windows and Linux: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, Weapon Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
+A SimulationCraft workbench for Windows and Linux: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, Weapon Lab and Trinket Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
 
 **Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [SimC-Lab.AppImage](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab.AppImage) or [simc-lab_amd64.deb](https://github.com/Roburmaster/simc-lab/releases/latest/download/simc-lab_amd64.deb) (Linux, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
 
@@ -17,7 +17,7 @@ For development, run `npm run install-engine` once and then `npm start` (http://
 3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, or Talent Search.
 4. Set fight style, duration, target count, iterations and target error, then run the simulation.
 
-Weapon Lab is the exception: it ranks weapons for every specialization on SimulationCraft's own reference characters, so it runs without an import.
+Weapon Lab and Trinket Lab are the exceptions: they rank weapons and trinkets for every specialization on SimulationCraft's own reference characters, so they run without an import.
 
 **Armory imports.** The installed SimC engine downloads the character through its own Blizzard API access in one short run, and the app rewrites the result into the addon export's shape: gems, enchants and crafted stats by ID (read from the report's item links, since SimC's profile writer turns an Armory character's gems into stat strings), and the Armory's item stats kept, as SimC uses them for catalyzed items. The Armory shows the gear from the character's last logout and has no bags, Great Vault or crests, so Crest Planner skips its items. An Armory character is marked as such and is never sent to the WoW addon, by hand or automatically: the game has its own, fresher copy.
 
@@ -27,7 +27,7 @@ All application text is English. Profiles and results remain on your PC.
 
 Gear, gems, enchants and consumables offered as new choices must be explicitly tagged as Midnight (expansion 11) in the cached public client-data catalog. There is no older-expansion toggle or item-ID cutoff. The backend also validates manual comparison variants.
 
-The catalog currently contains 3,521 current-expansion equippable items supported by the engine, 105 permanent enchants and 75 gems. Data is pinned to WoW 12.1.0.69814 and a content hash. Unknown provenance is rejected. Older items reissued in current-season dungeons are excluded from the item browser and Gear Compare. Upgrade Finder and Weapon Lab are the exceptions: they offer them only through the active season's own raid and Mythic+ loot tables (see below).
+The catalog currently contains 3,521 current-expansion equippable items supported by the engine, 105 permanent enchants and 75 gems. Data is pinned to WoW 12.1.0.69814 and a content hash. Unknown provenance is rejected. Older items reissued in current-season dungeons are excluded from the item browser and Gear Compare. Upgrade Finder, Weapon Lab and Trinket Lab are the exceptions: they offer them only through the active season's own raid and Mythic+ loot tables (see below).
 
 Your actual imported baseline is preserved, including existing older gear. You can test a Midnight enchant or gem on an existing item without replacing the item's other properties. Existing old gems or enchants may remain unchanged in the baseline; they cannot be selected as new alternatives.
 
@@ -137,6 +137,16 @@ A score is the share of that whole character the weapon carries, so the tiers re
 
 **The tier list page.** A finished job offers one page holding every class and specialization it covered, each hand separately, with each weapon in its tier, where it drops, the stat pair a crafted item was ranked at, and a link to Wowhead that shows the item's tooltip on hover. Open it in the app or save it and send it on: everything but that tooltip script is in the file, so it reads the same from a folder as it does from the app.
 
+## Trinket Lab
+
+Trinket Lab is one trinket tier list per specialization, charted the way Bloodmallet charts them. It runs on the same reference characters as Weapon Lab — SimulationCraft's own profiles, SimC Lab's own where SimulationCraft has none — with both trinkets taken off. That character, wearing no trinket at all, is the baseline, and each trinket is worn alone in the first slot with the second left empty, so one trinket's worth never depends on which second trinket a profile's authors happened to pick. Healing specializations are left out: SimulationCraft cannot simulate healing, and a trinket is mostly its effect, which no stat score can value.
+
+The candidates are every trinket in the active season's loot tables — raid, Mythic+ (reissued older dungeon trinkets included, through the season's own tables), delves and crafting — filtered for the specialization as Upgrade Finder filters them. Each is simulated at every chosen item level, the top of an upgrade track (Champion, Hero and Myth by default), below the level its own source can give it, and then at that level: a delve or dungeon trinket stops at the top of the Hero track, a raid trinket reaches the Myth track and a last boss's its own higher drop level, and a crafted trinket its crafting cap. Source limits are set as in Weapon Lab, and equal footing shows every trinket at every level instead. The bar for a trinket is what it adds over no trinket, split at each level; its tier is read at its top level, with the same thresholds as Weapon Lab.
+
+A specialization with more trinkets than the final round size (16, 32 or 64; 64 covers every list in Midnight Season 2) is screened first, one run per trinket at its top level, and the best go on to be simulated at every level; the rest keep their screened number and no curve. Tanks are ranked on the weighted DPS and survival score with a calibrated boss each, and Augmentation on the raid's damage against its measured share, as in Weapon Lab. A trinket that completes an item set with the reference gear — Zul'jin's Guillotine Technique beside Maze'roa — is marked, and the rest are measured from the best trinket without one. A job is limited to 8,000 trinket and item level runs, counting every scenario; a full season list is about 2,400.
+
+**The tier list page.** A finished job offers one page with every class and specialization, each trinket in its tier with its split bar, source, item level and Wowhead tooltip, and the gain at every level in the row's data so the website can import it. Two trinkets together are not the sum of their bars; the page says so.
+
 ## Tank simulation
 
 Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner and Talent Search) then ranks results on DPS and survival.
@@ -167,7 +177,7 @@ The search is bounded and deterministic. It is not exhaustive, adaptive across s
 
 Results include DPS, differences from baseline, approximate 95% confidence intervals, actual SimC input and downloadable HTML/JSON reports. The History tab persists completed jobs across server restarts. Unfinished jobs are marked interrupted after a restart.
 
-Jobs run sequentially with configurable CPU threads. Limits are 128 alternative builds, 256 runs per job (Upgrade Finder: 800 candidates, two profileset runs per scenario; Weapon Lab: 2,400 candidate runs, one or two profileset runs per specialization and scenario) and 5 queued/running jobs. Active and queued jobs can be cancelled. Files are stored in runs/; the import field is also remembered in browser localStorage.
+Jobs run sequentially with configurable CPU threads. Limits are 128 alternative builds, 256 runs per job (Upgrade Finder: 800 candidates, two profileset runs per scenario; Weapon Lab: 2,400 candidate runs, one or two profileset runs per specialization and scenario; Trinket Lab: 8,000 trinket and item level runs) and 5 queued/running jobs. Active and queued jobs can be cancelled. Files are stored in runs/; the import field is also remembered in browser localStorage.
 
 The server listens only on 127.0.0.1, verifies Host and POST tokens, rejects file/network/output directives in profile imports, and launches SimC without a shell. The compiled engine has networking disabled.
 

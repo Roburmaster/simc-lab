@@ -46,6 +46,12 @@
 .tier-C{background:#242a36;border-color:#3d475a;color:#b6c0d0}
 .tier-D{background:#2c2429;border-color:#5b4450;color:#c3aab4}
 .weapon-specs .check.stale small{color:var(--amber)}
+.trinket-table td:nth-child(3){width:34%;min-width:160px}
+.trinket-bar{position:relative;display:block;height:14px;border-radius:4px;background:#1f2633;overflow:hidden}
+.trinket-bar i{position:absolute;top:0;bottom:0}
+.legend-line{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:12px;color:var(--muted)}
+.legend-line span{display:inline-flex;align-items:center;gap:6px}
+.legend-line i{width:14px;height:10px;border-radius:3px;display:inline-block}
 .tier-page-links{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0}
 .tier-page-links .hint{margin:0;flex:1;min-width:220px}
 

@@ -12,6 +12,8 @@ import {readUpgradeState} from './lib/crests.mjs';
 import {presets as tankPresets,isTank} from './lib/tank.mjs';
 import {loadReferenceSpecs,publicSpec,clearReferenceCache,craftedItemLevel,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
 import {tierListPage} from './lib/tierpage.mjs';
+import {trinketListPage} from './lib/trinketpage.mjs';
+import {limits as trinketLimits,trinketSteps,levelSteps} from './lib/trinkets.mjs';
 import {upgradeReportPage} from './lib/upgradepage.mjs';
 import {healerWeights,contents as healerContents} from './lib/healers.mjs';
 import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from './lib/engine.mjs';
@@ -105,11 +107,18 @@ const server=http.createServer(async(req,res)=>{
       try{const tree=talentData.find(p.info);const build=decodeTalents(p.info.talents,tree);p.talents={specId:tree.specId,name:tree.specName,className:tree.className,points:pointTotals(build,tree),errors:validateBuild(build,tree,{budgets:{class:34,spec:34,hero:13},entries:talentData.entries}),nodes:[...tree.classNodes,...tree.specNodes,...tree.heroNodes].filter(n=>build.selected[n.id]).map(n=>({id:n.id,name:n.name,rank:build.selected[n.id].rank,tree:tree.classNodes.includes(n)?'class':tree.specNodes.includes(n)?'spec':'hero'}))};}catch(e){p.talents={errors:[e.message]};}
       return json(res,200,p);
     }
+    // Trinket Lab ranks damage and tank specializations; healers are named so the page can say why they are missing.
+    if(req.method==='GET'&&route==='/api/trinket-specs'){
+      const specs=await loadReferenceSpecs(engine.source,talentData);
+      return json(res,200,{specs:specs.filter(s=>!s.healer).map(publicSpec),healers:specs.filter(s=>s.healer).map(s=>s.label),tracks:season.tracks,difficulties:season.difficulties,
+        steps:levelSteps(season,season.tracks.map(t=>t.id)),defaultSteps:levelSteps(season).map(s=>s.track),craftedCap:await craftedItemLevel(engine.source),limits:trinketLimits,season:season.season});
+    }
     if(req.method==='POST'&&route==='/api/preview'){
       const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists,embellished:plan.upgrade.candidates.filter(c=>c.embellishment).length,blocked:plan.upgrade.blocked,limitsUsed:plan.upgrade.limitsUsed,steps:upgradeSteps(plan.upgrade,plan.scenarios.length)};
       const crests=plan.crests&&{affordable:plan.crests.affordable,candidates:plan.crests.candidates.length,items:plan.crests.items,budget:plan.crests.budget,state:plan.crests.state};
       const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,healers:plan.weapons.specs.filter(s=>s.healer).length,craftedStats:plan.weapons.craftedStats.length,sources:plan.weapons.sources,levels:plan.weapons.levels,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
-      return json(res,200,{variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
+      const trinkets=plan.trinkets&&{specs:plan.trinkets.specs.length,trinkets:plan.trinkets.trinkets,candidates:plan.trinkets.candidates,skipped:plan.trinkets.skipped,tanks:plan.trinkets.specs.filter(s=>s.tank).length,sources:plan.trinkets.sources,levels:plan.trinkets.levels,steps:trinketSteps(plan.trinkets,plan.scenarios.length),screened:plan.trinkets.specs.filter(s=>new Set(s.candidates.map(c=>c.itemId)).size>plan.trinkets.finalists).length};
+      return json(res,200,{trinkets,variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:trinkets?trinkets.steps:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
     if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs());
@@ -123,6 +132,15 @@ const server=http.createServer(async(req,res)=>{
       if(!job?.weapons)return json(res,404,{error:'No Weapon Lab job with that id.'});
       const html=tierListPage(jobs.public(job));
       const filename=`weapon-tier-list-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
+      return res.end(html);
+    }
+    const trinketList=route.match(/^\/trinket-tier-list\/([\da-f-]{36})\.html$/);
+    if(req.method==='GET'&&trinketList){
+      const job=jobs.jobs.get(trinketList[1]);
+      if(!job?.trinkets)return json(res,404,{error:'No Trinket Lab job with that id.'});
+      const html=trinketListPage(jobs.public(job));
+      const filename=`trinket-tier-list-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
       return res.end(html);
     }
@@ -145,7 +163,7 @@ const server=http.createServer(async(req,res)=>{
       // Reports are generated by SimC. Serve downloads so their scripts never share this app's origin.
       res.writeHead(200,{'Content-Type':ext==='.json'?'application/json':'application/octet-stream','Content-Disposition':`attachment; filename="${report[2]}"`});return res.end(data);
     }
-    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css'};
+    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/weapons.js':'weapons.js','/trinkets.js':'trinkets.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css'};
     if(req.method==='GET'&&assets[route]){const file=assets[route];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(await fs.readFile(path.join(root,'public',file)));}
     json(res,404,{error:'Not found.'});
   }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}
