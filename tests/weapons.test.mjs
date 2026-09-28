@@ -301,11 +301,11 @@ test('a weapon that completes an item set with the reference gear is found, and 
     `  { "Bite of Zul'jan"   , "bite_of_zuljan" ,    "MID_BOZ",     28,  2070,   2,   1,   -1,        -1, 1291726, { 270173, 268209, 268213,  0 } },`,
     `  { "Bite of Zul'jan"   , "bite_of_zuljan" ,    "MID_BOZ",     28,  2070,   2,   2,   -1,        -1, 1291726, { 270173, 268209, 268213,  0 } },`
   ].join('\n'));
-  assert.deepEqual(bonuses[0],{name:"Bite of Zul'jan",setId:2070,pieces:2,classId:1,specId:-1,spellId:1291726,items:[270173,268209,268213]});
+  assert.deepEqual(bonuses[0],{name:"Bite of Zul'jan",option:'bite_of_zuljan',setId:2070,pieces:2,classId:1,specId:-1,spellId:1291726,items:[270173,268209,268213]});
   const setCatalog={items:new Map([[270173,{name:"Zul'jin's Guillotine Technique"}],[268213,{name:"Maze'roa"}]]),setBonuses:bonuses};
   const fury={info:{class:'warrior'},specId:72,gear:{trinket2:gear('trinket2',270173),main_hand:gear('main_hand',268213),off_hand:gear('off_hand',237847)}};
   const {completedSet}=await import('../lib/weapons.mjs');
-  assert.deepEqual(completedSet(fury,'main_hand',268213,setCatalog),{name:"Bite of Zul'jan",pieces:2,with:["Zul'jin's Guillotine Technique"]},'Maze\'roa in the main hand pairs with the trinket');
+  assert.deepEqual(completedSet(fury,'main_hand',268213,setCatalog),{name:"Bite of Zul'jan",option:'bite_of_zuljan',pieces:2,with:["Zul'jin's Guillotine Technique"]},'Maze\'roa in the main hand pairs with the trinket');
   assert.equal(completedSet(fury,'main_hand',268209,setCatalog)?.name,"Bite of Zul'jan",'so does the other set weapon');
   assert.equal(completedSet(fury,'main_hand',30,setCatalog),null,'a weapon outside the set brings nothing');
   assert.equal(completedSet(fury,'off_hand',268209,setCatalog),null,'in the off hand the set is already complete without it');
