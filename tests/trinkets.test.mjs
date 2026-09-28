@@ -8,7 +8,7 @@ const champion=track(616,'Champion',290,12780),hero=track(617,'Hero',305,12790),
 myth.finalDrop={bonusId:13848,itemLevel:344};
 const trinket=(id,name,extra={})=>({id,name,itemClass:4,itemSubClass:0,inventoryType:12,stats:[],...extra});
 // A set that the trinket completes with the reference weapon, as Zul'jin's Guillotine Technique does with Maze'roa.
-const catalog={items:new Map([[70,{name:"Maze'roa"}]]),setBonuses:[{name:"Bite of Zul'jan",pieces:2,classId:0,specId:0,items:[70,54]}]};
+const catalog={items:new Map([[70,{name:"Maze'roa"}]]),setBonuses:[{name:"Bite of Zul'jan",option:'bite_of_zuljan',pieces:2,classId:0,specId:0,items:[70,54]}]};
 const season={
   season:{id:2,name:'Season 2'},tracks:[champion,hero,myth],difficulties:[{name:'Mythic',track:618}],weaponSpecs:[],bonusSockets:{},
   entries:[
@@ -51,8 +51,9 @@ test('each trinket runs up to the level its own source can give, and no further'
   assert.equal(of('Healer charm').length,0,'a trinket for other specializations is left out');
   assert.equal(of('Ring').length,0,'only trinkets');
   // One row per trinket is its top, the one the tier is read from.
-  assert.equal(list.filter(c=>c.top).length,5);
-  assert.ok(list.filter(c=>c.top).every(c=>c.itemLevel===Math.max(...list.filter(x=>x.itemId===c.itemId).map(x=>x.itemLevel))));
+  // One row per entry is its top, the one the tier is read from; the set trinket is two entries.
+  assert.equal(list.filter(c=>c.top).length,6);
+  assert.ok(list.filter(c=>c.top).every(c=>c.itemLevel===Math.max(...list.filter(x=>x.group===c.group).map(x=>x.itemLevel))));
   const flask=list.filter(c=>c.name==='Flask');
   assert.deepEqual(flask[0].sources,['Mythic+ · Murder Row','Delves · Delves'],'both sources are named');
   const card=list.filter(c=>c.name==='Card');
@@ -63,10 +64,17 @@ test('each trinket runs up to the level its own source can give, and no further'
   assert.equal(new Set(list.map(c=>c.key)).size,list.length);
 });
 
-test('a trinket that completes a set with the reference gear is marked',()=>{
+test('a trinket that completes a set is simulated with and without the set bonus',()=>{
   const list=trinketCandidates(arms,season,catalog,{drops,steps});
-  assert.equal(list.find(c=>c.name==='Technique').set.name,"Bite of Zul'jan");
+  const technique=list.filter(c=>c.name==='Technique');
+  const withSet=technique.filter(c=>c.set),without=technique.filter(c=>c.setOff);
+  assert.equal(withSet.length,4);assert.equal(without.length,4,'every level, both ways');
+  assert.equal(withSet[0].set.name,"Bite of Zul'jan");
+  assert.equal(withSet[0].extra,undefined,'the set bonus is left as the gear gives it');
+  assert.deepEqual(without[0].extra,['set_bonus=bite_of_zuljan_2pc=0'],'and switched off for the trinket alone');
+  assert.notEqual(withSet[0].group,without[0].group);
   assert.equal(list.find(c=>c.name==='Idol').set,undefined);
+  assert.equal(list.find(c=>c.name==='Idol').setOff,undefined);
 });
 
 test('the Great Vault takes a dungeon trinket to the Myth track, and the chest level stays a step',()=>{
@@ -87,7 +95,7 @@ test('the Great Vault takes a dungeon trinket to the Myth track, and the chest l
 
 test('equal footing shows every trinket at every step',()=>{
   const list=trinketCandidates(arms,season,catalog,{drops,steps,equal:true});
-  for(const id of [50,51,52,53,54])assert.deepEqual(list.filter(c=>c.itemId===id).map(c=>c.itemLevel),[299,314,327]);
+  for(const group of ['50','51','52','53','54','54|noset'])assert.deepEqual(list.filter(c=>c.group===group).map(c=>c.itemLevel),[299,314,327]);
 });
 
 test('screening keeps the best trinkets with every one of their levels',()=>{
@@ -100,7 +108,7 @@ test('screening keeps the best trinkets with every one of their levels',()=>{
   assert.equal(kept.length,8,'all levels of both');
   assert.equal(specSteps({candidates:list,support:false,tank:null},2,1),2,'screened, then a final round');
   assert.equal(specSteps({candidates:list,support:true,tank:{}},16,2),5,'one round, an idle run, per scenario, plus the boss');
-  assert.equal(trinketCount({candidates:list}),5);
+  assert.equal(trinketCount({candidates:list}),6,'the set trinket counts twice');
 });
 
 test('gain is measured against the character with no trinket',()=>{

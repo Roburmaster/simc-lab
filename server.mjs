@@ -60,7 +60,7 @@ const server=http.createServer(async(req,res)=>{
     const url=new URL(req.url,`http://127.0.0.1:${port}`);const route=url.pathname;
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
-    if(!route.startsWith('/reports/'))res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' https://wow.zamimg.com https://www.wowhead.com https://nether.wowhead.com; style-src 'self' 'unsafe-inline' https://wow.zamimg.com; img-src 'self' data: https://wow.zamimg.com https://*.wowhead.com; frame-ancestors 'none'; connect-src 'self' https://www.wowhead.com https://nether.wowhead.com https://wow.zamimg.com");
+    if(!route.startsWith('/reports/'))res.setHeader('Content-Security-Policy',"default-src 'self'; font-src 'self' data:; script-src 'self' https://wow.zamimg.com https://www.wowhead.com https://nether.wowhead.com; style-src 'self' 'unsafe-inline' https://wow.zamimg.com; img-src 'self' data: https://wow.zamimg.com https://*.wowhead.com; frame-ancestors 'none'; connect-src 'self' https://www.wowhead.com https://nether.wowhead.com https://wow.zamimg.com");
     if(req.method==='POST'){
       const received=Buffer.from(req.headers['x-simc-token'] || '');const expected=Buffer.from(token);
       if(received.length!==expected.length || !timingSafeEqual(received,expected))return json(res,403,{error:'Reload the page.'});
