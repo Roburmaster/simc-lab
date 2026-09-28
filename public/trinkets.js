@@ -22,13 +22,23 @@ export function trinketUI({api,notice,updateCount}){
         <label>Final round size<select id="trinket-finalists">${data.limits.finalists.map(n=>`<option value="${n}" ${n===data.limits.finalists.at(-1)?'selected':''}>${n} trinkets per spec</option>`).join('')}</select></label>
         <p class="hint">A specialization with more trinkets than this is screened first, one run per trinket at its top level; only the best go on to be simulated at every level. The rest keep their screened number and no curve.</p></section>
       <section class="upgrade-card"><strong>Item level per source</strong><p class="hint">How far each source can take a trinket. Only the raid reaches the Myth track, and its last bosses drop above it. Crafted trinkets sit at their own cap${data.craftedCap?` — item level ${data.craftedCap} this season`:''}.</p>
-        <div class="two-col upgrade-track"><label>Raid difficulty<select data-tsource-track="raid">${data.difficulties.map(d=>`<option value="${d.track}" ${d.track===data.difficulties.at(-1).track?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label><label>Crafted item level<input id="trinket-crafted-ilevel" type="number" min="1" max="1000" value="${data.craftedCap||hero.levels.at(-1).itemLevel}"></label></div>
+        <div class="two-col upgrade-track"><label>Raid difficulty<select data-tsource-track="raid">${data.difficulties.map(d=>`<option value="${d.track}" ${d.track===data.difficulties.at(-1).track?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label><label>Crafted item level<select id="trinket-crafted-ilevel">${craftedOptions()}</select></label></div>
         ${['mplus','delves'].map(kind=>`<div class="two-col upgrade-track"><label>${kind==='mplus'?'Mythic+':'Delves'} track<select data-tsource-track="${kind}">${data.tracks.map(t=>`<option value="${t.id}" ${t.id===hero.id?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('')}</select></label><label>Level<select data-tsource-level="${kind}">${levelOptions(hero.id,hero.levels.at(-1).level)}</select></label></div>`).join('')}
+        <label class="check"><input type="checkbox" id="trinket-vault" checked>Mythic+ trinkets from the Great Vault</label>
+        <div class="two-col upgrade-track" id="trinket-vault-level"><label>Vault track<select data-tsource-track="vault">${data.tracks.map(t=>`<option value="${t.id}" ${t.id===data.tracks.at(-1).id?'selected':''}>${esc(t.name)} · ${t.levels[0].itemLevel}–${t.levels.at(-1).itemLevel}</option>`).join('')}</select></label><label>Level<select data-tsource-level="vault">${levelOptions(data.tracks.at(-1).id,data.tracks.at(-1).levels.at(-1).level)}</select></label></div>
+        <p class="hint">The vault gives Mythic+ loot on the Myth track, above what the dungeon's own chest can. With it on, a dungeon trinket runs up to the vault's level, and the chest's level stays one of its steps.</p>
         <label class="check"><input type="checkbox" id="trinket-equal">Show every trinket at every level instead</label>
         <p class="hint">Equal footing answers what a trinket is worth rather than what you can reach with it, so it shows trinkets at levels their source cannot give.</p></section>
     </div>
     <div id="trinket-count" class="hint">Counting trinkets …</div>
     <p class="result-note">The reference character keeps its gear, gems and enchants and loses both trinkets; one trinket goes in the first slot. Tank specializations are ranked on the same weighted DPS and survival score as the rest of the app, with a boss calibrated for each of them.</p>`;
+  }
+  // Crafted trinkets have no upgrade track: the choice is an item level, every one the season's tracks use up to the
+  // crafting cap, and the cap itself, which is the level SimulationCraft's own season profiles craft to.
+  function craftedOptions(){
+    const cap=data.craftedCap||data.tracks.at(-2)?.levels.at(-1).itemLevel;
+    const levels=[...new Set([...data.tracks.flatMap(t=>t.levels.map(l=>l.itemLevel)).filter(l=>l<cap),cap])].sort((a,b)=>b-a);
+    return levels.map(l=>`<option value="${l}" ${l===cap?'selected':''}>${l}${l===cap?' · crafting cap':''}</option>`).join('');
   }
   const checked=name=>$$(`[data-group="${name}"]:checked`).map(e=>e.value);
   function settings(){
@@ -37,7 +47,8 @@ export function trinketUI({api,notice,updateCount}){
       sources:{raid:{track:Number($('[data-tsource-track="raid"]').value)},
         mplus:{track:Number($('[data-tsource-track="mplus"]').value),level:Number($('[data-tsource-level="mplus"]').value)},
         delves:{track:Number($('[data-tsource-track="delves"]').value),level:Number($('[data-tsource-level="delves"]').value)},
-        crafted:{itemLevel:Number($('#trinket-crafted-ilevel').value)}}};
+        crafted:{itemLevel:Number($('#trinket-crafted-ilevel').value)}},
+      vault:$('#trinket-vault').checked?{track:Number($('[data-tsource-track="vault"]').value),level:Number($('[data-tsource-level="vault"]').value)}:false};
   }
   async function init(){
     try{
@@ -45,9 +56,9 @@ export function trinketUI({api,notice,updateCount}){
       $('#trinket-options').addEventListener('change',event=>{
         const kind=event.target.dataset.tsourceTrack;
         if(kind&&kind!=='raid'){const level=$(`[data-tsource-level="${kind}"]`);level.innerHTML=levelOptions(event.target.value,Number(level.value));}
+        if(event.target.id==='trinket-vault')$('#trinket-vault-level').hidden=!event.target.checked;
         updateCount();
       });
-      $('#trinket-options').addEventListener('input',event=>{if(event.target.id==='trinket-crafted-ilevel')updateCount();});
       $('#trinket-options').addEventListener('click',event=>{
         const {all,none,only}=event.target.dataset;
         if(!all&&!none&&!only)return;
@@ -91,7 +102,7 @@ export function trinketUI({api,notice,updateCount}){
     const lab=job.trinkets,specs=lab.specs,src=lab.sources||{};
     const levels=[...new Set(specs.flatMap(s=>s.candidates.map(c=>c.itemLevel)))].sort((a,b)=>a-b);
     const palette=new Map(levels.map((level,i)=>[level,levelColors[Math.round(i*(levelColors.length-1)/Math.max(1,levels.length-1))]]));
-    let html=`<div class="search-summary"><strong>Trinket Lab · ${specs.length} specialization${specs.length===1?'':'s'} · item level ${lab.levels.min===lab.levels.max?lab.levels.max:`${lab.levels.min}–${lab.levels.max}`}</strong><p class="hint">${src.equal?`Equal footing: every trinket at ${esc((src.steps||[]).join(', '))}, including levels its source cannot give.`:`Each trinket up to the level its source can give: ${esc([src.raid&&`raid ${src.raid.label}`,src.mplus&&`Mythic+ ${src.mplus.label}`,src.delves&&`delves ${src.delves.label}`,src.crafted&&`crafted ${src.crafted.label}`].filter(Boolean).join(' · '))}.`} One trinket worn, the other slot empty; the gain is over no trinket at all.<br>Screening uses up to ${number(lab.screen.iterations)} iterations at ${lab.screen.targetError}% target error; the final round uses ${number(job.settings.iterations)} iterations at ${job.settings.targetError}%.</p><p class="legend-line">${levels.map(l=>`<span><i style="background:${palette.get(l)}"></i>${l}</span>`).join('')}</p></div>`;
+    let html=`<div class="search-summary"><strong>Trinket Lab · ${specs.length} specialization${specs.length===1?'':'s'} · item level ${lab.levels.min===lab.levels.max?lab.levels.max:`${lab.levels.min}–${lab.levels.max}`}</strong><p class="hint">${src.equal?`Equal footing: every trinket at ${esc((src.steps||[]).join(', '))}, including levels its source cannot give.`:`Each trinket up to the level its source can give: ${esc([src.raid&&`raid ${src.raid.label}`,src.mplus&&`Mythic+ ${src.mplus.label}`,src.delves&&`delves ${src.delves.label}`,src.vault&&`Mythic+ through the Great Vault ${src.vault.label.replace(/^Great Vault · /,'')}`,src.crafted&&`crafted ${src.crafted.label}`].filter(Boolean).join(' · '))}.`} One trinket worn, the other slot empty; the gain is over no trinket at all.<br>Screening uses up to ${number(lab.screen.iterations)} iterations at ${lab.screen.targetError}% target error; the final round uses ${number(job.settings.iterations)} iterations at ${job.settings.targetError}%.</p><p class="legend-line">${levels.map(l=>`<span><i style="background:${palette.get(l)}"></i>${l}</span>`).join('')}</p></div>`;
     if(lab.skipped?.length)html+=`<p class="hint">Left out: ${esc(lab.skipped.map(s=>s.label).join(', '))}.</p>`;
     if(job.results.some(r=>Number.isFinite(r.rank)))html+=`<p class="tier-page-links"><a class="button small secondary" href="/trinket-tier-list/${job.id}.html" target="_blank" rel="noopener">Open the tier list page ↗</a><a class="button small secondary" href="/trinket-tier-list/${job.id}.html?download" download>Download it</a><span class="hint">One page with every class and specialization and its chart, ready to read or send on.</span></p>`;
     for(const stage of (job.stages||[]).filter(st=>st.status==='failed'&&st.stage===0))html+=`<p class="notice">${esc(specs.find(s=>s.key===stage.spec)?.label||stage.spec)}: tank boss calibration failed — ${esc(stage.error)}</p>`;
