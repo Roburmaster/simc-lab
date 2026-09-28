@@ -289,7 +289,8 @@ test('a plan counts its runs and refuses a selection that cannot be simulated',a
   await assert.rejects(prepareWeapons({weapons:{kinds:['nonsense']}},catalog,season,talentData,dir,1),/weapon category/);
   await assert.rejects(prepareWeapons({weapons:{equal:true,track:track.id,level:9}},catalog,season,talentData,dir,1),/upgrade track and level/);
   await assert.rejects(prepareWeapons({weapons:{sources:{crafted:{itemLevel:0}}}},catalog,season,talentData,dir,1),/Crafted item level/);
-  await assert.rejects(prepareWeapons({weapons:{specs:['warrior-arms']}},catalog,season,talentData,dir,3000),/Narrow it/);
+  // No cap on how much a job may simulate: many scenarios are still accepted.
+  assert.equal((await prepareWeapons({weapons:{specs:['warrior-arms']}},catalog,season,talentData,dir,3000)).specs.length,1);
   await fs.rm(dir,{recursive:true,force:true});
 });
 
