@@ -124,3 +124,24 @@ test('a GitHub token is found for API calls, and a failed check does not claim S
   const r=plan({installedWow:null,local,head:null,nightly:null,live:live('12.1.0.69933','h1'),sourceOnly:true});
   assert.equal(r.action,'none');assert.match(r.reason,/could not be reached/);assert.doesNotMatch(r.reason,/newest commit/);
 });
+
+test('the engine is not switched while a simulation runs, and the end of an update is announced',async()=>{
+  const {Updater}=await import('../lib/updater.mjs');
+  let busy=true,settled=null;
+  const u=new Updater({busy:()=>busy,onInstalled:async()=>{},onSettled:s=>{settled=s.status;},idleWait:5});
+  const order=[];
+  u.check=async()=>({live:{wowBuild:'1',contentHash:'h'},decision:{action:'data',reason:'data'}});
+  u.downloadData=async()=>{order.push(busy?'switched while busy':'switched when idle');throw new Error('stop here');};
+  u.state={status:'running',log:[]};
+  const done=u.run('auto').catch(e=>e.message);
+  await new Promise(r=>setTimeout(r,30));
+  assert.deepEqual(order,[],'still waiting');
+  busy=false;
+  assert.equal(await done,'stop here');
+  assert.deepEqual(order,['switched when idle']);
+  assert.match(u.state.log.join('\n'),/Waiting for running simulations/);
+  const v=new Updater({busy:()=>false,onInstalled:async()=>{},onSettled:s=>{settled=s.status;}});
+  v.run=async()=>{throw new Error('x');};
+  v.start('auto');await new Promise(r=>setTimeout(r,10));
+  assert.equal(settled,'failed');assert.equal(v.running,false);
+});
