@@ -25,7 +25,9 @@ function safeStore(key,value){try{localStorage.setItem(key,value);}catch{}}
 async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.mode===value));$('#page-title').innerHTML=`${esc(modes[value][0])}<span class="accent">.</span>`;$('#breadcrumb').textContent=modes[value][0];$('#page-description').textContent=modes[value][1];$('#workspace').hidden=['history','wow'].includes(value);$('#history').hidden=value!=='history';$('#wow-panel').hidden=value!=='wow';$('#enchant-panel').hidden=value!=='enchants';$('#compare-panel').hidden=value!=='compare';$('#quick-info').hidden=value!=='quick';$('#talent-panel').hidden=value!=='talents';$('#upgrade-panel').hidden=value!=='upgrades';$('#crest-panel').hidden=value!=='crests';$('#weapon-panel').hidden=value!=='weapons';$('#trinket-panel').hidden=value!=='trinkets';
   // Weapon Lab and Trinket Lab run on SimC's reference profiles, so they hide the character panel and always offer tank settings.
   const lab=['weapons','trinkets'].includes(value);
-  $('.import-panel').hidden=lab;tank.forWeapons(lab);
+  // Trinket Lab carries every setting it uses in its own panel, so the rest of the app's settings are out of sight.
+  document.body.classList.toggle('clean-lab',value==='trinkets');
+  $('.import-panel').hidden=lab;tank.forWeapons(value==='weapons');
   if(value==='history')await loadHistory();else if(value==='wow')await wow.refresh();else updateCount();}
 $$('.nav').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode).catch(e=>notice(e.message))));
 async function importProfile(){notice('');const text=$('#profile').value;const parsed=await api('/api/import',{profile:text});profile=parsed;importedText=text;selections={};safeStore('simc-lab-profile',text);$('#character').hidden=false;$('#character').innerHTML=`<span class="character-icon">◈</span><div><strong>${esc(parsed.info.name)}</strong><p>${esc(parsed.info.race)} · ${esc(parsed.info.spec)} ${esc(parsed.info.class)} · Level ${esc(parsed.info.level)}</p></div>${parsed.armory?'<span class="pill" title="Imported from the Armory. Not sent to the WoW addon.">Armory</span>':''}<span class="pill">${Object.keys(parsed.gear).length} gear slots</span>`;$('#import-status').textContent=`Imported · ${Object.keys(parsed.gear).length} gear slots · ready to simulate`;renderEnchants();renderImportedChoices();features.render(parsed);crests.show(parsed);tank.show(parsed);updateCount();return parsed;}
@@ -51,7 +53,7 @@ function renderVariants(){$('#variants').innerHTML=variants.map((v,i)=>`<div cla
 $('#add-variant').addEventListener('click',()=>{variants.push({name:`Alternative ${variants.length+1}`,text:''});renderVariants();updateCount();});
 $('#variants').addEventListener('input',event=>{const el=event.target;if(el.dataset.field){variants[Number(el.closest('.variant').dataset.index)][el.dataset.field]=el.value;updateCount();}});
 $('#variants').addEventListener('click',event=>{if(event.target.dataset.remove!==undefined){variants.splice(Number(event.target.dataset.remove),1);renderVariants();updateCount();}});
-function request(){const targets=Number($('#targets').value);const scenarioTargets=$('#matrix').checked?[...new Set([targets,3,5])]:[targets];return {profile:$('#profile').value,mode,enchants:selections,combine:$('input[name=combine]:checked').value==='true',talentSearch:features.settings(),upgrades:upgrades.settings(),crests:crests.settings(),weapons:weapons.settings(),trinkets:trinkets.settings(),tank:tank.settings(),environment:environment.settings(),variants,iterations:Number($('#iterations').value),targetError:Number($('#target-error').value),duration:Number($('#duration').value),threads:Number($('#threads').value),scenarios:scenarioTargets.map(n=>({style:$('#fight-style').value,targets:n}))};}
+function request(){if(mode==='trinkets')return trinkets.request();const targets=Number($('#targets').value);const scenarioTargets=$('#matrix').checked?[...new Set([targets,3,5])]:[targets];return {profile:$('#profile').value,mode,enchants:selections,combine:$('input[name=combine]:checked').value==='true',talentSearch:features.settings(),upgrades:upgrades.settings(),crests:crests.settings(),weapons:weapons.settings(),trinkets:trinkets.settings(),tank:tank.settings(),environment:environment.settings(),variants,iterations:Number($('#iterations').value),targetError:Number($('#target-error').value),duration:Number($('#duration').value),threads:Number($('#threads').value),scenarios:scenarioTargets.map(n=>({style:$('#fight-style').value,targets:n}))};}
 function updateCount(){
   syncGearSelection();
   const groups=Object.values(selections).filter(v=>v.length);const count=groups.reduce((n,v)=>n+v.length,0);$('#selection-count').textContent=`${count} selected`;
@@ -66,15 +68,16 @@ function updateCount(){
   if(mode==='trinkets'){$('#run-summary').textContent='One trinket chart per specialization';$('#run-count').textContent='';trinkets.count(request);}
 }
 $$('.settings input,.settings select,input[name=combine]').forEach(el=>el.addEventListener('change',updateCount));
-$('#run').addEventListener('click',async()=>{
+async function runJob(){
   try{notice('');$('#run').disabled=true;if(!['weapons','trinkets'].includes(mode)&&(!profile||importedText!==$('#profile').value))await importProfile();const data=request();const preview=await api('/api/preview',data);$('#run-summary').textContent=`Starting ${preview.total} runs …`;const job=await api('/api/jobs',data);activity.refresh();await watchJob(job.id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){notice(e.message);}finally{$('#run').disabled=false;updateCount();}
-});
+}
+$('#run').addEventListener('click',runJob);
 $('#cancel').addEventListener('click',async()=>{try{if(currentJob){await api(`/api/jobs/${currentJob}/cancel`,{});await poll();}}catch(e){notice(e.message);}});
 $('#job-progress').addEventListener('click',event=>{const id=event.target.closest('[data-watch-job]')?.dataset.watchJob;if(id)watchJob(id).catch(e=>notice(e.message));});
 async function watchJob(id){clearTimeout(pollTimer);currentJob=id;$('#results').hidden=false;await poll();}
 async function poll(){clearTimeout(pollTimer);try{const id=currentJob;const job=await api(`/api/jobs/${id}`);if(id!==currentJob)return;renderJob(job);if(['running','queued'].includes(job.status))pollTimer=setTimeout(poll,1200);}catch(e){notice(e.message);pollTimer=setTimeout(poll,3000);}}
 function renderJob(job){
-  $('#job-status').textContent=states[job.status]||job.status;$('#job-log').textContent=job.log || (job.status==='queued'?'Waiting for earlier jobs to finish …':'Waiting for the engine …');$('#cancel').hidden=!['running','queued'].includes(job.status);
+  $('#job-status').textContent=states[job.status]||job.status;$('#job-log').textContent=job.log || (job.status==='queued'?'Waiting for earlier jobs to finish …':'Waiting for the engine …');$('#cancel').hidden=!['running','queued'].includes(job.status);trinkets.running(['running','queued'].includes(job.status));
   const waiting=job.queue?.ahead?.length?`<div class="queue-note">Waiting in the queue behind ${job.queue.ahead.length} job${job.queue.ahead.length===1?'':'s'}. Simulations run one at a time.${job.queue.ahead.map(j=>`<br>${esc(modes[j.mode]?.[0]||j.mode)} · ${esc(j.name)} · ${j.status==='running'?`running, ${j.done} / ${j.total}${j.current?' · '+esc(j.current):''}`:'queued'} <button class="text-button" data-watch-job="${esc(j.id)}">Show</button>`).join('')}</div>`:'';
   const progress=describeProgress(job);const scenario=job.current?.scenario?` · ${esc(job.current.scenario.style)}, ${job.current.scenario.targets} target${job.current.scenario.targets===1?'':'s'}`:'';
   const took=job.started&&job.finished?` · took ${duration((new Date(job.finished)-new Date(job.started))/1000)}`:'';
@@ -125,7 +128,7 @@ const features=featureUI({api,getProfile:()=>profile,notice,updateCount,addVaria
 const upgrades=upgradeUI({api,notice,updateCount});
 const crests=crestUI({api,notice,updateCount});
 const weapons=weaponUI({api,notice,updateCount});
-const trinkets=trinketUI({api,notice,updateCount});
+const trinkets=trinketUI({api,notice,updateCount,run:()=>runJob(),cancel:()=>$('#cancel').click()});
 const engineView=engineUI({api,notice});
 const activity=activityUI({api,openJob:async id=>{if(mode==='history')await setMode('quick');await watchJob(id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});},onChange:()=>{if(mode==='history')loadHistory().catch(()=>{});}});
 const wow=wowUI({api,notice,importText:async text=>{$('#profile').value=text;await importProfile();}});

@@ -6,7 +6,9 @@ const kinds={nightly:'Official nightly build',source:'Built from source'};
 // Engine and app updates: one button installs the newest matching SimC and game data; the desktop app also
 // updates itself through the preload bridge.
 export function engineUI({api,notice}){
-  let status=null,polling=null;
+  let status=null,polling=null,settings={},startup=null;
+  api('/api/settings').then(s=>{settings=s;if(status)render(status);},()=>{});
+  const startupNote=()=>startup?` Last start: ${esc(startup.reason)}`:'';
   const desktop=window.simcDesktop;
   $('#workspace').insertAdjacentHTML('beforebegin',`<section id="setup-panel" class="panel setup-panel" hidden><div class="info-symbol">⇪</div><div><h2>Install SimulationCraft</h2><p>SimC Lab needs the SimulationCraft engine and current game data. One click downloads the newest official build that matches your World of Warcraft version. If no matching build exists yet, SimC is built from source, and missing build tools are installed first.</p><button class="button primary setup-button" data-update="auto">Install SimC <span>→</span></button><div class="update-progress" data-progress></div></div></section>`);
   $('.sidebar-bottom').insertAdjacentHTML('beforeend','<button class="button small secondary sidebar-update" data-update="auto">Update SimC</button>');
@@ -19,6 +21,8 @@ export function engineUI({api,notice}){
       <p>SimulationCraft<br><strong>${esc(e.version||'Not installed')}</strong>${e.wowVersion?` · WoW ${esc(e.wowVersion)}`:''}<br>${esc(kinds[e.source]||'Built from source')}${e.commitDate?` · ${when(e.commitDate)}`:''}</p>
       <p>Commit<br><code>${esc(e.commit||'—')}</code></p>
       <div class="engine-actions"><button class="button small primary" data-update="auto">Update SimC</button><button class="button small secondary" data-check>Check for updates</button></div>
+      <label class="check"><input type="checkbox" id="auto-update-simc" ${settings.autoUpdateSimc===false?'':'checked'}>Install new official SimC builds automatically when SimC Lab starts</label>
+      <p class="hint">Checks the SimC nightly and game data at every start and installs them when they are newer. It never compiles from source by itself.${startupNote()}</p>
       <div id="engine-check" class="hint"></div><div class="update-progress" data-progress></div>
       <details><summary>Advanced</summary><p class="hint">${linux?'Build from source downloads the SimC source and compiles it with the system’s Git, CMake and C++ compiler. It needs about 8 GB and takes 20–40 minutes; SIMC_LAB_BUILD_JOBS limits the compiler jobs on a small machine.':'Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.'}</p><div class="engine-actions"><button class="button small secondary" data-update="source">Build from source</button><button class="button small secondary" data-update="data">Refresh game data only</button></div>
         <p class="hint">Install one exact SimC commit, to compare with a result made on it (Trinket Lab's Bloodmallet parity check). It must be for the WoW build you have installed; the next ordinary update moves on again.</p><div class="engine-actions"><input id="engine-pin" type="text" placeholder="SimC commit, e.g. a69b069" spellcheck="false" autocomplete="off"><button class="button small secondary" data-pin>Install this commit</button></div></details>
@@ -33,7 +37,7 @@ export function engineUI({api,notice}){
     try{
       const c=await api('/api/engine/check',{});
       const lines=[c.decision.reason];
-      if(Number.isFinite(c.local?.behind))lines.push(c.local.behind?`Installed SimC ${String(c.local.commit).slice(0,7)} is ${c.local.behind} commit${c.local.behind===1?'':'s'} behind GitHub (${c.head.branch}).`:'Installed SimC is the newest commit on GitHub.');
+      if(Number.isFinite(c.local?.behind))lines.push(!c.local.behind?'Installed SimC is the newest commit on GitHub.':c.nightly?.sha===c.local.commit?`GitHub has ${c.local.behind} newer commit${c.local.behind===1?'':'s'} (${c.head.branch}) that no official build contains yet; the next nightly will. Build from source takes them now.`:`Installed SimC ${String(c.local.commit).slice(0,7)} is ${c.local.behind} commit${c.local.behind===1?'':'s'} behind GitHub (${c.head.branch}).`);
       if(c.nightly)lines.push(`Newest official build: ${c.nightly.version} for WoW ${c.nightly.wowVersion} (${when(c.nightly.date)})`);
       if(c.head)lines.push(`Newest source: ${c.head.sha.slice(0,7)} for WoW ${c.head.wowVersion} (${when(c.head.date)})`);
       if(c.live)lines.push(`Game data: WoW ${c.live.wowBuild}`);
@@ -58,6 +62,10 @@ export function engineUI({api,notice}){
     if(state.status==='complete'&&state.result?.changed)setTimeout(()=>location.reload(),1200);
   }
 
+  document.addEventListener('change',async event=>{
+    if(event.target.id!=='auto-update-simc')return;
+    try{settings=await api('/api/settings',{autoUpdateSimc:event.target.checked});}catch(err){notice(err.message);event.target.checked=!event.target.checked;}
+  });
   document.addEventListener('click',event=>{
     const update=event.target.closest('[data-update]');if(update){start(update.dataset.update);return;}
     if(event.target.closest('[data-check]'))check();
@@ -71,6 +79,6 @@ export function engineUI({api,notice}){
     $('[data-app-install]').hidden=update.state!=='downloaded';
   });
   // Resume the view of an update that was running when the page loaded.
-  api('/api/engine/update').then(state=>{if(state.status==='running'){document.querySelectorAll('[data-update]').forEach(b=>b.disabled=true);poll();}},()=>{});
+  api('/api/engine/update').then(state=>{startup=state.startup||null;if(status)render(status);if(state.status==='running'){document.querySelectorAll('[data-update]').forEach(b=>b.disabled=true);poll();}},()=>{});
   return {render,missing:()=>!status?.engine.ready||!!status?.loadError};
 }

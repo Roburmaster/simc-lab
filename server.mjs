@@ -20,6 +20,7 @@ import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from
 import * as engine from './lib/engine.mjs';
 import {upstreamDir,currentProfileDir} from './lib/paths.mjs';
 import {Updater} from './lib/updater.mjs';
+import {loadSettings,saveSettings} from './lib/settings.mjs';
 import {WowAddon} from './lib/wowaddon.mjs';
 import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
 import {importArmory,isArmoryProfile} from './lib/armory.mjs';
@@ -68,6 +69,8 @@ const server=http.createServer(async(req,res)=>{
     }
     if(req.method==='GET'&&route==='/api/status')return json(res,200,{engine:await engineStatus(),expansion:catalog?.expansion||null,loadError,token,app:appInfo});
     if(req.method==='GET'&&route==='/api/engine/update')return json(res,200,updater.state);
+    if(req.method==='GET'&&route==='/api/settings')return json(res,200,await loadSettings());
+    if(req.method==='POST'&&route==='/api/settings')return json(res,200,await saveSettings(await body(req)));
     if(req.method==='POST'&&route==='/api/engine/check')return json(res,200,await updater.check());
     if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto',sha=null}=await body(req);if(!['auto','nightly','source','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode,sha||null));}
     if(req.method==='GET'&&route==='/api/wow')return json(res,200,await wow.status());
@@ -111,7 +114,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/trinket-specs'){
       const specs=await loadReferenceSpecs(engine.source,talentData);
       return json(res,200,{specs:specs.filter(s=>!s.healer).map(publicSpec),healers:specs.filter(s=>s.healer).map(s=>s.label),tracks:season.tracks,difficulties:season.difficulties,
-        steps:levelSteps(season,season.tracks.map(t=>t.id)),defaultSteps:levelSteps(season).map(s=>s.track),craftedCap:await craftedItemLevel(engine.source),limits:trinketLimits,scenarios:scenarioPresets,engine:await engineStatus().then(e=>({version:e.version,commit:e.commit})),season:season.season});
+        steps:levelSteps(season,season.tracks.map(t=>t.id)),defaultSteps:levelSteps(season).map(s=>s.track),craftedCap:await craftedItemLevel(engine.source),limits:trinketLimits,scenarios:scenarioPresets,engine:await engineStatus().then(e=>({version:e.version,commit:e.commit,maxThreads:e.maxThreads})),tankPresets,season:season.season});
     }
     if(req.method==='POST'&&route==='/api/preview'){
       const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists,embellished:plan.upgrade.candidates.filter(c=>c.embellishment).length,blocked:plan.upgrade.blocked,limitsUsed:plan.upgrade.limitsUsed,steps:upgradeSteps(plan.upgrade,plan.scenarios.length)};
@@ -169,4 +172,6 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}
 });
 server.listen(port,'127.0.0.1',()=>console.log(`SimC Lab: http://127.0.0.1:${port}`));
+// Keep SimC on the newest official build when the user wants it: checked once at every start.
+loadSettings().then(s=>s.autoUpdateSimc?updater.startup():null).catch(e=>console.error('Automatic SimC update failed:',e.message));
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{jobs.child?.kill();server.close();process.exit(0);});

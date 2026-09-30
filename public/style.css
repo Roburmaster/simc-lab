@@ -119,3 +119,12 @@
 .pair-table td:nth-child(2),.pair-table th:nth-child(2),.pair-table td:first-child,.pair-table th:first-child{text-align:left;white-space:normal}
 .pair-table td:nth-child(2){min-width:220px}
 .pair-table td:nth-child(2) a:first-child{margin-left:0}
+
+.clean-lab .settings-column,.clean-lab #environment-panel,.clean-lab #tank-panel{display:none!important}
+.clean-lab .workspace{grid-template-columns:minmax(0,1fr)}
+.trinket-run{margin-top:22px;display:grid;gap:4px}
+.trinket-run .run-actions{display:flex;gap:12px;align-items:center;margin-top:10px}
+.trinket-run .run-actions .primary{width:auto;min-width:240px;gap:18px}
+.trinket-run .run-actions .danger{margin-top:0;width:auto}
+.trinket-run .three-col{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media(max-width:900px){.trinket-run .three-col{grid-template-columns:1fr 1fr}}

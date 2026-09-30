@@ -6,7 +6,7 @@ const number=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(
 // One colour per item level, dark to bright: the bright end of a bar is the highest level simulated.
 const levelColors=['#3b4a63','#4f6b8f','#5f8fb8','#7fb6d6','#a6dcc1','#f3d27a','#f3b754','#ff9d4a'];
 
-export function trinketUI({api,notice,updateCount}){
+export function trinketUI({api,notice,updateCount,run,cancel}){
   let data=null,countTimer=null;
   $('#quick-info').insertAdjacentHTML('beforebegin',`<section id="trinket-panel" class="panel" hidden><div class="panel-heading"><h2><span class="step">01</span> Trinket Lab</h2><span id="trinket-season" class="pill">Loading season</span></div><p class="panel-intro">Finds the best two trinkets for each specialization. SimulationCraft's own reference character wears two of the season's trinkets at once, each at the item level its source can really give it, and the pairs are ranked on what they add together. Each trinket is also measured alone, with the other slot empty: that isolated value shows how it scales with item level and decides which trinkets are paired.</p><div id="trinket-options"><p class="hint">Loading specializations …</p></div></section>`);
 
@@ -18,7 +18,7 @@ export function trinketUI({api,notice,updateCount}){
     for(const spec of data.specs){if(!byClass.has(spec.className))byClass.set(spec.className,[]);byClass.get(spec.className).push(spec);}
     $('#trinket-options').innerHTML=`<div class="weapon-grid">
       <section class="upgrade-card"><strong>Specializations</strong><p class="hint">${data.specs.length} specializations have a reference profile. Healers are left out: SimulationCraft cannot simulate healing, and a trinket is mostly its effect, which no stat score can value${data.healers.length?` (${esc(data.healers.join(', '))})`:''}.${data.specs.some(s=>s.stale)?` <b>${data.specs.filter(s=>s.stale).map(s=>esc(s.label)).join(', ')}</b> still carry the previous season's gear.`:''}${data.specs.some(s=>s.ours)?` SimC Lab carries its own profile for <b>${data.specs.filter(s=>s.ours).map(s=>esc(s.label)).join(', ')}</b>, until SimulationCraft ships one.`:''}</p><div class="upgrade-group-actions"><button class="text-button" data-all="tspec">All</button><button class="text-button" data-none="tspec">None</button><button class="text-button" data-only="tank">Tanks only</button></div><div class="weapon-specs">${[...byClass].map(([className,specs])=>`<div class="weapon-class"><h4>${esc(className)}</h4>${specs.map(s=>`<label class="check${s.stale?' stale':''}${s.ours?' ours':''}"><input type="checkbox" data-group="tspec" value="${esc(s.key)}" data-tank="${s.tank?'1':'0'}" checked>${esc(s.specName)}<small>${s.ours?'ours':esc(s.season)}${s.stale?' · old gear':''}${s.tank?' · tank':''}</small></label>`).join('')}</div>`).join('')}</div></section>
-      <section class="upgrade-card"><strong>Scenarios</strong><p class="hint">A trinket can be the best in a raid and ordinary in a dungeon, so each scenario is ranked on its own. With none ticked, the fight style and targets under simulation settings are used.</p><div class="upgrade-groups">${data.scenarios.map(p=>`<label class="check"><input type="checkbox" data-group="tscn" value="${esc(p.id)}" ${p.id==='raid_st'?'checked':''}>${esc(p.label)}<small>${esc(p.style)} · ${p.targets} target${p.targets===1?'':'s'}${p.duration?` · ${p.duration} sec`:''}</small></label>`).join('')}</div><p class="hint">Mythic+ pulls run for their own length. Casting Patchwerk is for checking effects that react to enemy casts, and for comparing with other sites that use it.</p></section>
+      <section class="upgrade-card"><strong>Scenarios</strong><p class="hint">A trinket can be the best in a raid and ordinary in a dungeon, so each scenario is ranked on its own. Tick at least one.</p><div class="upgrade-groups">${data.scenarios.map(p=>`<label class="check"><input type="checkbox" data-group="tscn" value="${esc(p.id)}" ${p.id==='raid_st'?'checked':''}>${esc(p.label)}<small>${esc(p.style)} · ${p.targets} target${p.targets===1?'':'s'}${p.duration?` · ${p.duration} sec`:''}</small></label>`).join('')}</div><p class="hint">Mythic+ pulls run for their own length. Casting Patchwerk is for checking effects that react to enemy casts, and for comparing with other sites that use it.</p></section>
       <section class="upgrade-card"><strong>Pairs</strong><p class="hint">Players wear two trinkets, so pairs are the ranking. Pairing every trinket with every other is far too many runs, so only the best trinkets alone go into the pair pool, with those close behind the cutoff and the best on-use trinkets.</p>
         <label>What to rank<select id="trinket-model"><option value="pairs" selected>Trinket pairs · two worn together</option><option value="single">Single trinkets only · the other slot empty</option></select></label>
         <div class="two-col"><label>Pair pool<select id="trinket-pool">${data.limits.pool.map(n=>`<option value="${n}" ${n===16?'selected':''}>${n?`best ${n} trinkets`:'every trinket'}</option>`).join('')}</select></label>
@@ -40,8 +40,17 @@ export function trinketUI({api,notice,updateCount}){
       <label class="check"><input type="checkbox" id="trinket-parity">Run as a Bloodmallet parity check</label>
       <label>Bloodmallet's SimC commit<input id="trinket-compare-sha" type="text" placeholder="e.g. a69b069" spellcheck="false" autocomplete="off"></label>
       <p class="hint">This engine: SimC ${esc(data.engine?.version||'')} · commit <code>${esc((data.engine?.commit||'').slice(0,10))}</code>.</p></details>
-    <div id="trinket-count" class="hint">Counting trinkets …</div>
-    <p class="result-note">The reference character keeps its gear, gems and enchants and loses both trinkets. Tank specializations show damage and survival apart, and are ordered on the same weighted score as the rest of the app, with a boss calibrated for each of them. Casting Patchwerk (under fight style) is Patchwerk with a boss that casts, for trinkets that react to enemy casts.</p>`;
+    <section class="upgrade-card trinket-run"><strong>Run</strong>
+      <div class="three-col"><label>Precision<select id="trinket-iterations"><option value="1000">1 000 · quick test</option><option value="10000" selected>10 000 · standard</option><option value="50000">50 000 · high</option><option value="100000">100 000 · very high</option></select></label>
+        <label>Target error<select id="trinket-target-error"><option value="0">None · all iterations</option><option value="0.1" selected>0.10%</option><option value="0.05">0.05%</option><option value="0.02">0.02%</option></select></label>
+        <label>Raid fight length (sec)<input id="trinket-duration" type="number" min="10" max="1200" value="300"></label>
+        <label>CPU threads<input id="trinket-threads" type="number" min="1" max="${data.engine?.maxThreads||16}" value="${data.engine?.maxThreads||4}"></label></div>
+      <div class="two-col"><label>Tank boss<select id="trinket-tank-preset">${Object.entries(data.tankPresets||{}).map(([key,p])=>`<option value="${esc(key)}" ${key==='mythic'?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>
+        <label>Tank ranking weight<input id="trinket-tank-weight" type="range" min="0" max="100" step="5" value="50"><span class="hint" id="trinket-tank-weight-label">50% survival · 50% DPS</span></label></div>
+      <p class="hint">Mythic+ pulls keep their own length. Tank specializations fight a boss calibrated to their reference character; their damage and survival are shown apart, and the weight only orders them. Raid buffs are SimC Lab's defaults.</p>
+      <div id="trinket-count" class="hint">Counting trinkets …</div>
+      <div class="run-actions"><button class="button primary" id="trinket-run">Run Trinket Lab <span>→</span></button><button class="button danger" id="trinket-cancel" hidden>Cancel job</button></div></section>
+    <p class="result-note">The reference character keeps its gear, gems and enchants and loses both trinkets. Tank specializations show damage and survival apart, and are ordered on the same weighted score as the rest of the app, with a boss calibrated for each of them.</p>`;
   }
   // Crafted trinkets have no upgrade track: the choice is an item level, every one the season's tracks use up to the
   // crafting cap, and the cap itself, which is the level SimulationCraft's own season profiles craft to.
@@ -68,10 +77,16 @@ export function trinketUI({api,notice,updateCount}){
         const kind=event.target.dataset.tsourceTrack;
         if(kind&&kind!=='raid'){const level=$(`[data-tsource-level="${kind}"]`);level.innerHTML=levelOptions(event.target.value,Number(level.value));}
         if(event.target.id==='trinket-vault')$('#trinket-vault-level').hidden=!event.target.checked;
+        if(event.target.id==='trinket-tank-weight'){const w=Number(event.target.value);$('#trinket-tank-weight-label').textContent=`${w}% survival · ${100-w}% DPS`;}
         if(event.target.id==='trinket-model')$('#trinket-pool,#trinket-pair-finalists').forEach(el=>el.disabled=event.target.value!=='pairs');
         updateCount();
       });
+      $('#trinket-options').addEventListener('input',event=>{
+        if(event.target.id==='trinket-tank-weight'){const w=Number(event.target.value);$('#trinket-tank-weight-label').textContent=`${w}% survival · ${100-w}% DPS`;}
+      });
       $('#trinket-options').addEventListener('click',event=>{
+        if(event.target.closest('#trinket-run')){event.preventDefault();if(!checked('tscn').length&&!$('#trinket-parity').checked){notice('Choose at least one scenario.');return;}run();return;}
+        if(event.target.closest('#trinket-cancel')){event.preventDefault();cancel();return;}
         const {all,none,only}=event.target.dataset;
         if(!all&&!none&&!only)return;
         event.preventDefault();
@@ -81,6 +96,14 @@ export function trinketUI({api,notice,updateCount}){
       });
     }catch(e){$('#trinket-options').textContent=e.message;notice(e.message);}
   }
+  // The whole job request: Trinket Lab takes nothing from the rest of the app's settings.
+  function request(){
+    const t=settings();
+    return {mode:'trinkets',trinkets:t,tank:{preset:$('#trinket-tank-preset')?.value||'mythic',weight:Number($('#trinket-tank-weight')?.value??50)},
+      iterations:Number($('#trinket-iterations')?.value||10000),targetError:Number($('#trinket-target-error')?.value??0.1),duration:Number($('#trinket-duration')?.value||300),threads:Number($('#trinket-threads')?.value||1),
+      scenarios:[{style:'Patchwerk',targets:1}]};
+  }
+  function running(on){const r=$('#trinket-run'),c=$('#trinket-cancel');if(r)r.disabled=on;if(c)c.hidden=!on;}
   function count(request){
     clearTimeout(countTimer);if(!data)return;
     $('#trinket-count').textContent='Counting trinkets …';
@@ -181,5 +204,5 @@ export function trinketUI({api,notice,updateCount}){
     html+=`<p class="result-note">A tier is the distance behind the best trinket of the same specialization at each one's top level: S under 0.5, A under 1.5, B under 3, C under 5, then D — in percent of DPS, or in score points for tanks. A trinket marked ◆ completes an item set with the reference gear: its lead is that set's bonus. Two trinkets together are not the sum of their bars, which is why pairs are simulated worn together. The reference character is not you: sim the pair on your own character before you decide.</p>`;
     return html;
   }
-  return {init,settings,count,results};
+  return {init,settings,request,running,count,results};
 }
