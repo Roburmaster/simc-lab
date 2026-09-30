@@ -204,12 +204,14 @@ test('a trinket the reference gear leaves no room for is marked and never paired
 
 test('scenario presets: raid and Mythic+ fights, pulls at their own length',()=>{
   const list=presetScenarios(['raid_st','mplus_small','dungeon']);
-  assert.deepEqual(list,[{preset:'raid_st',label:'Raid · single target',style:'Patchwerk',targets:1},{preset:'mplus_small',label:'Mythic+ · small pull',style:'Patchwerk',targets:3,duration:40},{preset:'dungeon',label:'Mythic+ · dungeon route',style:'DungeonSlice',targets:1}]);
+  assert.deepEqual(list,[{preset:'raid_st',label:'Raid · single target',style:'Patchwerk',targets:1},{preset:'mplus_small',label:'Mythic+ · small pull',style:'Patchwerk',targets:3,duration:40,bloodlust:false,potion:false},{preset:'dungeon',label:'Mythic+ · dungeon route',style:'DungeonSlice',targets:1}]);
   assert.throws(()=>presetScenarios(['nope']),/Unknown scenario/);
   assert.throws(()=>presetScenarios([]),/at least one/);
   assert.ok(scenarioPresets.every(p=>fightStyles.includes(p.style)));
   const input=inputFor({text:'warrior="x"'},{iterations:100,targetError:0,duration:300,threads:1},list[1],{json:'a',html:'b'});
   assert.match(input,/^max_time=40$/m);assert.match(input,/^desired_targets=3$/m);
+  assert.ok(input.includes('\noverride.bloodlust=0\npotion=disabled\noverride.allow_potions=0\n'),'a small pull has no Bloodlust and no potion');
+  assert.equal(/potion=disabled/.test(inputFor({text:'warrior="x"'},{iterations:100,targetError:0,duration:300,threads:1},presetScenarios(['mplus_large'])[0],{json:'a',html:'b'})),false,'a large pull keeps them');
   assert.match(inputFor({text:'warrior="x"'},{iterations:100,targetError:0,duration:300,threads:1},list[0],{json:'a',html:'b'}),/^max_time=300$/m);
 });
 
@@ -249,4 +251,50 @@ test('Bloodmallet parity builds the same input Bloodmallet does',async()=>{
   for(const c of rows)assert.match(c.line,/^trinket1=,id=\d+,ilevel=\d+$/,'item ID and item level only');
   assert.deepEqual(rows.filter(c=>c.name==='Heart').map(c=>c.itemLevel),[299,314,327],'every step, whatever the source');
   assert.equal(rows.filter(c=>c.setOff).length,0,'no set variant');
+});
+
+test('the stat stick model keeps a neutral second trinket in the baseline and beside every candidate',async()=>{
+  const {statStickProfile,parityProfile,models}=await import('../lib/trinkets.mjs');
+  assert.equal(models.statstick,'Single trinkets beside a stat stick');
+  const p=statStickProfile(arms,299);
+  assert.ok(p.text.endsWith('\ntrinket2=,id=142508,bonus_id=607,ilevel=299'),'strength stick for Arms, at the lowest step');
+  assert.equal(/potion=/.test(p.text.split('trinket2=')[1]),false,'no forced potion outside parity');
+  assert.deepEqual(p.statStick,{trinket2:',id=142508,bonus_id=607,ilevel=299',stick:142508,itemLevel:299});
+  // Realistic candidates are unchanged: bonus IDs and source levels, in the first slot only.
+  const rows=trinketCandidates(arms,season,catalog,{drops,steps});
+  const lines=profilesetLines(rows.filter(c=>c.top).slice(0,2),p,catalog);
+  assert.ok(lines.every(l=>/^profileset\."t\d{4}"(=trinket1=|\+=)/.test(l)));
+  assert.ok(parityProfile(arms,299).text.includes('\ntrinket2=,id=142508,bonus_id=607,ilevel=299\npotion=lights_potential_2'),'parity still adds the potion');
+  assert.equal(specSteps({candidates:rows,support:false,tank:null},64,2,'statstick'),2,'no pair rounds');
+});
+
+test('an embellished trinket is worn in place of an embellishment the gear can give up',async()=>{
+  const {freeableSlots,resolveOverLimit}=await import('../lib/trinkets.mjs');
+  // Two crafted pieces carry the Embellished marker 8960 with an embellishment's effect bonus; one piece is born embellished.
+  const limits={items:new Map([[300,512]]),bonuses:new Map([[8960,512]]),quantities:new Map([[512,2]])};
+  const s={itemLimits:limits,embellishments:[{name:'Arcanoweave Lining',bonusIds:[8960,12384]},{name:"Hunter's Ritual Stone",bonusIds:[13771,8960]}]};
+  const gear={wrist:{id:100,value:'bracers,id=100,bonus_id=8793/8960/12384/13750,ilevel=331'},off_hand:{id:200,value:'impetus,id=200,bonus_id=8960/13771/13836'},neck:{id:300,value:'band,id=300,bonus_id=1'},head:{id:400,value:'helm,id=400,bonus_id=5'}};
+  const spec={gear};
+  const free=freeableSlots(spec,s,{items:new Map([[100,{name:"Spellbreaker's Bracers"}]])});
+  assert.deepEqual(free.map(f=>[f.slot,f.embellishment,f.line]),[
+    ['wrist','Arcanoweave Lining','wrist=bracers,id=100,bonus_id=8793/13750,ilevel=331'],
+    ['off_hand',"Hunter's Ritual Stone",'off_hand=impetus,id=200,bonus_id=13836']
+  ],'the born embellished neck cannot be freed');
+  assert.equal(free[0].item,"Spellbreaker's Bracers");
+  // The gear wears two; an embellished trinket goes in once per piece that can give its embellishment up.
+  const equipped={wrist:new Set([512]),off_hand:new Set([512])};
+  const cands=[{key:'a',itemId:1,name:'Dominion',group:'1',limits:[512],extra:['x=1']},{key:'b',itemId:2,name:'Heart',group:'2'}];
+  const out=resolveOverLimit(cands,{equipped,itemLimits:limits,free});
+  assert.deepEqual(out.map(c=>[c.name,c.freed?.slot??null,c.extra]),[['Dominion','wrist',['x=1',free[0].line]],['Dominion','off_hand',['x=1',free[1].line]],['Heart',null,undefined]]);
+  assert.deepEqual(out.map(c=>c.key),['t0001','t0002','t0003']);
+  // With nothing to give up, it stays marked as over the limit.
+  const stuck=resolveOverLimit(cands,{equipped,itemLimits:limits,free:[]});
+  assert.deepEqual(stuck[0].overLimit,['Embellished']);
+  // With room to spare nothing changes.
+  assert.equal(resolveOverLimit(cands,{equipped:{wrist:new Set([512])},itemLimits:limits,free}).length,2);
+  // Pairs: two embellished trinkets need two pieces freed; freeing the same piece twice is not enough.
+  const [dw,doff]=out,other={key:'c',itemId:3,name:'Stone',group:'3',limits:[512],freed:{slot:'wrist'}};
+  assert.equal(pairLegal(dw,out[2],{equipped,itemLimits:limits}),true);
+  assert.equal(pairLegal(dw,other,{equipped,itemLimits:limits}),false,'both give up the bracers');
+  assert.equal(pairLegal(doff,other,{equipped,itemLimits:limits}),true,'one gives up the bracers, the other the off-hand');
 });

@@ -28,7 +28,7 @@ for(const spec of result.trinkets.specs){
   assert.equal(ranked.length,items.size,`${spec.key}: every trinket is ranked once`);
   assert.ok(ranked.every(r=>byKey.get(r.key).top),`${spec.key}: the tier is read at each trinket's top level`);
   assert.ok(ranked.every((r,i)=>r.rank===i+1&&'SABCD'.includes(r.tier)),`${spec.key}: ranks run without a gap and all have a tier`);
-  assert.equal(ranked.find(r=>!byKey.get(r.key).set).behind,0,`${spec.key}: measured from the best trinket without a set`);
+  assert.equal(ranked.find(r=>!byKey.get(r.key).set&&!byKey.get(r.key).overLimit).behind,0,`${spec.key}: measured from the best trinket without a set`);
   const finals=ranked.filter(r=>!r.screened);
   assert.equal(finals.length,16,`${spec.key}: the final round took the best 16`);
   // A finalist has a curve: every level it was simulated at, rising with item level within noise.
