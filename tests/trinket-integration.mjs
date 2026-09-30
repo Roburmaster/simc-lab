@@ -10,7 +10,7 @@ assert.ok(data.specs.every(s=>!s.healer&&!s.text),'no healers, and the profile t
 assert.ok(data.healers.length>=5,'the healers left out are named');
 const specs=['warrior-arms','warrior-protection'];
 // A final round of 16 is smaller than either list, so both screening and the final round run.
-const request={mode:'trinkets',trinkets:{specs,finalists:16,model:'single'},tank:{preset:'dungeon',weight:50},iterations:300,duration:60,threads:8,targetError:0,scenarios:[{style:'Patchwerk',targets:1}]};
+const request={mode:'trinkets',trinkets:{specs,finalists:16,model:'statstick'},tank:{preset:'dungeon',weight:50},iterations:300,duration:60,threads:8,targetError:0,scenarios:[{style:'Patchwerk',targets:1}]};
 const preview=await post('/api/preview',request);
 const t=preview.trinkets;
 assert.equal(t.specs,2);assert.equal(t.tanks,1);assert.equal(t.screened,2);
