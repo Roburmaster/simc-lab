@@ -1,6 +1,6 @@
 # SimC Lab
 
-A SimulationCraft workbench for Windows and Linux: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, Weapon Lab and Trinket Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
+A SimulationCraft workbench for Windows and Linux: Quick Sim, Enchant Lab, Gear Compare, an Upgrade Finder for every raid, dungeon, vault, delve and crafted source, a Crest Planner that says which equipped item to upgrade first, a Great Vault sim that says which vault choice to take, Weapon Lab and Trinket Lab tier lists for every specialization, Talent Search, and tank simulation that ranks damage and survival. Everything is simulated on your own PC, and the SimCLab addon brings the results into World of Warcraft.
 
 **Download:** [SimC-Lab-Setup.exe](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab-Setup.exe) (Windows 10/11, 64-bit) · [SimC-Lab.AppImage](https://github.com/Roburmaster/simc-lab/releases/latest/download/SimC-Lab.AppImage) or [simc-lab_amd64.deb](https://github.com/Roburmaster/simc-lab/releases/latest/download/simc-lab_amd64.deb) (Linux, 64-bit) · [all releases](https://github.com/Roburmaster/simc-lab/releases) · [mythicpersona.com/simc-lab](https://mythicpersona.com/simc-lab)
 
@@ -14,7 +14,7 @@ For development, run `npm run install-engine` once and then `npm start` (http://
 
 1. Type /simc in WoW and paste the complete addon export, or open **Import from the Armory** and enter region, realm and name (a worldofwarcraft.com, Raider.IO or Warcraft Logs character link works too).
 2. Click Import character.
-3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, or Talent Search.
+3. Choose Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, Great Vault, or Talent Search.
 4. Set fight style, duration, target count, iterations and target error, then run the simulation.
 
 Weapon Lab and Trinket Lab are the exceptions: they rank weapons and trinkets for every specialization on SimulationCraft's own reference characters, so they run without an import.
@@ -52,6 +52,10 @@ Candidates are filtered for your class and specialization: allowed classes, loot
 Results can be filtered by slot: pick Neck, Rings or Main hand and every item measured for that slot is listed — the upgrades, the ones that were no better, and the ones screening cut — so "why is this item not here?" has an answer on the page. The unfiltered lists are unchanged.
 
 Each scenario runs in two SimC profileset runs. Screening simulates every candidate with at most 2,000 iterations and a 0.5% target error. Candidates whose screened DPS could beat the current gear within the combined uncertainty then go to a final round with your iteration and target-error settings. The final round takes up to 24, 48 or 96 candidates, with a quota per slot. Results show the best upgrade per boss, dungeon or source, every measured upgrade, and screening results that were not simulated again. Screening-only numbers are labelled. A finished search also has its own **upgrade report** page: the character, the gear you wear slot by slot with the best upgrade for each, the best item per boss and dungeon, every final-round upgrade and the embellishment pairs. Like the weapon tier list it has no script of its own, so it can be opened from the app or downloaded as one HTML file and sent on. A search is limited to 800 candidates. Some crafted pieces require the matching profession to equip, and the data does not say which ones.
+
+## Great Vault
+
+Great Vault answers "which vault choice do I take?", as Raidbots does. The official SimulationCraft addon exports the vault's item choices in a `### Weekly Reward Choices` section, but only while the vault has rewards to claim: after the weekly reset, open the Great Vault in the game, type /simc and import that export. Every choice is simulated in its slot against the equipped gear in one SimC profileset run per scenario at your simulation settings. Rings and trinkets are tried in both slots and weapons in both hands where that is legal, and the better placement is shown. The enchant and the gems of the item a choice replaces carry over into it. A two-hander replaces a main hand and off-hand together; an off-hand that cannot be worn next to the equipped two-hander is listed as not simulated. Optionally, each choice below the top of its upgrade track is also simulated fully upgraded. The vault from an Armory import is never available: the Armory has no vault.
 
 ## Crest Planner
 
@@ -151,7 +155,7 @@ A specialization with more trinkets than the final round size (16, 32 or 64; 64 
 
 ## Tank simulation
 
-Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner and Talent Search) then ranks results on DPS and survival.
+Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, Great Vault and Talent Search) then ranks results on DPS and survival.
 
 SimC's built-in tank dummy uses level-70 damage values and never threatens a Midnight tank, and SimC gives players infinite health by default. SimC Lab replaces it with a calibrated boss, tuned once per job against the imported gear and then shared by every variant and scenario:
 

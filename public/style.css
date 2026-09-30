@@ -128,3 +128,4 @@
 .trinket-run .run-actions .danger{margin-top:0;width:auto}
 .trinket-run .three-col{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 @media(max-width:900px){.trinket-run .three-col{grid-template-columns:1fr 1fr}}
+.vault-pick{padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:6px;background:#141a25;margin:10px 0 14px}.vault-pick strong{color:var(--green)}.result-table tr.best td:first-child{box-shadow:inset 3px 0 0 var(--green)}
