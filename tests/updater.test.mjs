@@ -62,3 +62,19 @@ test('an installed engine newer than the nightly is kept for the current WoW bui
   assert.equal(plan({...args,local,live:live('12.1.0.69875','h2')}).action,'data');
   assert.equal(plan({...args,local:{...local,wowVersion:'12.1.0.69814'},live:live('12.1.0.69875')}).action,'nightly','a WoW patch replaces the engine');
 });
+
+test('at start, only an official build or new game data is installed by itself',async()=>{
+  const {Updater}=await import('../lib/updater.mjs');
+  for(const [action,started] of [['nightly',true],['data',true],['source',false],['none',false],['wait',false]]){
+    const u=new Updater({busy:()=>false,onInstalled:async()=>{}});
+    let mode=null;
+    u.check=async()=>({checkedAt:'t',local:{behind:3},decision:{action,reason:`r-${action}`}});
+    u.start=m=>{mode=m;return {status:'running'};};
+    await u.startup();
+    assert.equal(mode!==null,started,action);
+    assert.equal(u.state.startup.reason,`r-${action}`);
+  }
+  const busy=new Updater({busy:()=>true,onInstalled:async()=>{}});
+  busy.check=async()=>{throw new Error('must not check while simulations run');};
+  assert.equal(await busy.startup(),null);
+});
