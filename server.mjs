@@ -38,7 +38,7 @@ async function loadData(){
 }
 const jobs=new Jobs(null);await jobs.init();await loadData();
 const busy=()=>[...jobs.jobs.values()].some(j=>['queued','running'].includes(j.status));
-const updater=new Updater({busy,onInstalled:loadData});
+const updater=new Updater({busy,onInstalled:loadData,followSource:async()=>(await loadSettings()).followLatestCommit});
 // The WoW addon: installed from the copy inside the app, fed through Data.lua, and kept in step on every start.
 const wow=new WowAddon({installDir:engine.wowInstallDir,context:async()=>({tracks:trackTable(season),app:pkg.version})});
 async function sendToWow(job,options){
@@ -73,7 +73,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/settings')return json(res,200,await loadSettings());
     if(req.method==='POST'&&route==='/api/settings')return json(res,200,await saveSettings(await body(req)));
     if(req.method==='POST'&&route==='/api/engine/check')return json(res,200,await updater.check());
-    if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto',sha=null}=await body(req);if(!['auto','nightly','source','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode,sha||null));}
+    if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto',sha=null}=await body(req);if(!['auto','nightly','source','rebuild','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode,sha||null));}
     if(req.method==='GET'&&route==='/api/wow')return json(res,200,await wow.status());
     if(req.method==='POST'&&route==='/api/wow/install')return json(res,200,await wow.install());
     if(req.method==='POST'&&route==='/api/wow/uninstall')return json(res,200,await wow.uninstall());

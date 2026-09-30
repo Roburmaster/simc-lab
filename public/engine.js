@@ -16,15 +16,20 @@ export function engineUI({api,notice}){
   function render(s){
     status=s;const e=s.engine;
     const linux=s.app?.platform&&s.app.platform!=='win32';
+    // Linux has no official builds, and a Windows install can choose to follow the latest commit: both build from source.
+    const follow=linux||!!settings.followLatestCommit;
+    const side=document.querySelector('.sidebar-update');if(side)side.textContent=follow?'Update to latest commit':'Update SimC';
     if(linux)$('#setup-panel p').textContent='SimC Lab needs the SimulationCraft engine and current game data. On Linux SimC is built from source (20–40 minutes the first time); Git, CMake, a C++ compiler and libcurl must be installed, and the en_US.UTF-8 locale (Ubuntu: sudo apt install git cmake build-essential libcurl4-openssl-dev && sudo locale-gen en_US.UTF-8).';
     $('#engine-detail').innerHTML=`<p>Installed WoW<br><strong>${esc(e.installed||'Not found')}</strong></p>
       <p>SimulationCraft<br><strong>${esc(e.version||'Not installed')}</strong>${e.wowVersion?` · WoW ${esc(e.wowVersion)}`:''}<br>${esc(kinds[e.source]||'Built from source')}${e.commitDate?` · ${when(e.commitDate)}`:''}</p>
       <p>Commit<br><code>${esc(e.commit||'—')}</code></p>
-      <div class="engine-actions"><button class="button small primary" data-update="auto">Update SimC</button><button class="button small secondary" data-check>Check for updates</button></div>
-      ${s.app?.server?'':`<label class="check"><input type="checkbox" id="auto-update-simc" ${settings.autoUpdateSimc===false?'':'checked'}>Install new official SimC builds automatically when SimC Lab starts</label>
-      <p class="hint">Checks the SimC nightly and game data at every start and installs them when they are newer. It never compiles from source by itself.${startupNote()}</p>`}
+      <div class="engine-actions"><button class="button small primary" data-update="auto">${follow?'Update to latest commit':'Update SimC'}</button>${follow?'':'<button class="button small secondary" data-update="source">Update to latest commit</button>'}<button class="button small secondary" data-check>Check for updates</button></div>
+      <p class="hint">${follow?'Update to latest commit fetches the newest SimC commit on GitHub and compiles only what changed.':'Update SimC installs the newest official build (a day behind GitHub at most). Update to latest commit builds the newest GitHub commit from source instead.'}</p>
+      ${linux?'':`<label class="check"><input type="checkbox" id="follow-latest-commit" ${settings.followLatestCommit?'checked':''}>Always follow the latest SimC commit</label><p class="hint">Builds SimC from source whenever GitHub has a newer commit, instead of waiting for the next official build (a day at most). The first build takes 20–40 minutes; after that only what changed is compiled.</p>`}
+      ${s.app?.server?'':`<label class="check"><input type="checkbox" id="auto-update-simc" ${settings.autoUpdateSimc===false?'':'checked'}>${follow?'Update to the latest SimC commit automatically when SimC Lab starts':'Install new official SimC builds automatically when SimC Lab starts'}</label>
+      <p class="hint">${follow?'Checks GitHub and game data at every start, and builds a newer commit from source (only what changed is compiled).':'Checks the SimC nightly and game data at every start and installs them when they are newer.'}${startupNote()}</p>`}
       <div id="engine-check" class="hint"></div><div class="update-progress" data-progress></div>
-      <details><summary>Advanced</summary><p class="hint">${linux?'Build from source downloads the SimC source and compiles it with the system’s Git, CMake and C++ compiler. It needs about 8 GB and takes 20–40 minutes; SIMC_LAB_BUILD_JOBS limits the compiler jobs on a small machine.':'Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.'}</p><div class="engine-actions"><button class="button small secondary" data-update="source">Build from source</button><button class="button small secondary" data-update="data">Refresh game data only</button></div>
+      <details><summary>Advanced</summary><p class="hint">${linux?'Build from source downloads the SimC source and compiles it with the system’s Git, CMake and C++ compiler. It needs about 8 GB and takes 20–40 minutes; SIMC_LAB_BUILD_JOBS limits the compiler jobs on a small machine.':'Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.'}</p><p class="hint">Build from source (clean) empties the build folder and compiles all of SimC again: for when a build has gone wrong.</p><div class="engine-actions"><button class="button small secondary" data-update="rebuild">Build from source (clean)</button><button class="button small secondary" data-update="data">Refresh game data only</button></div>
         <p class="hint">Install one exact SimC commit, to compare with a result made on it (Trinket Lab's Bloodmallet parity check). It must be for the WoW build you have installed; the next ordinary update moves on again.</p><div class="engine-actions"><input id="engine-pin" type="text" placeholder="SimC commit, e.g. a69b069" spellcheck="false" autocomplete="off"><button class="button small secondary" data-pin>Install this commit</button></div></details>
       ${desktop?`<div class="divider"></div><p>SimC Lab<br><strong>${esc(s.app?.version||'')}</strong></p><div class="engine-actions"><button class="button small secondary" data-app-check>Check for app updates</button><button class="button small primary" data-app-install hidden>Restart and update</button></div><div class="hint" id="app-update"></div>`:''}`;
     const missing=!e.ready||!!s.loadError;
@@ -63,8 +68,9 @@ export function engineUI({api,notice}){
   }
 
   document.addEventListener('change',async event=>{
-    if(event.target.id!=='auto-update-simc')return;
-    try{settings=await api('/api/settings',{autoUpdateSimc:event.target.checked});}catch(err){notice(err.message);event.target.checked=!event.target.checked;}
+    const key={'auto-update-simc':'autoUpdateSimc','follow-latest-commit':'followLatestCommit'}[event.target.id];
+    if(!key)return;
+    try{settings=await api('/api/settings',{[key]:event.target.checked});if(key==='followLatestCommit'&&status)render(status);}catch(err){notice(err.message);event.target.checked=!event.target.checked;}
   });
   document.addEventListener('click',event=>{
     const update=event.target.closest('[data-update]');if(update){start(update.dataset.update);return;}

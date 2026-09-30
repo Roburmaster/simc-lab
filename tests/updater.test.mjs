@@ -89,3 +89,28 @@ test('where there are no official builds (Linux), a newer commit on GitHub is bu
   assert.equal(same.action,'none');assert.match(same.reason,/newest commit on GitHub/);
   assert.equal(plan({...args,local,head:{...head('fa7a6dc','12.1.0.69933'),date:'2026-09-30T12:15:00Z'},sourceOnly:false}).action,'none','with nightlies (Windows) a source commit alone never compiles');
 });
+
+test('update modes: latest commit skips what is installed, a clean build does not, unknown modes are refused',async()=>{
+  const {Updater}=await import('../lib/updater.mjs');
+  const u=new Updater({busy:()=>false,onInstalled:async()=>{}});
+  assert.throws(()=>u.start('everything'),/Unknown update mode/);
+  // Following the latest commit: a Windows install that chose it, or Linux always.
+  assert.equal(await new Updater({busy:()=>false,onInstalled:async()=>{},followSource:async()=>true}).sourceOnly(),true);
+  const plain=await new Updater({busy:()=>false,onInstalled:async()=>{}}).sourceOnly();
+  assert.equal(plain,process.platform!=='win32');
+  // At start, following installs compile a newer commit; others never do.
+  for(const [sourceOnly,started] of [[true,true],[false,false]]){
+    const s=new Updater({busy:()=>false,onInstalled:async()=>{}});let mode=null;
+    s.check=async()=>({checkedAt:'t',sourceOnly,local:{behind:3},decision:{action:'source',reason:'r'}});s.start=m=>{mode=m;return {};};
+    await s.startup();assert.equal(mode!==null,started);
+  }
+});
+
+test('following the latest commit on Windows builds GitHub head even when a newer nightly exists',()=>{
+  const local={commit:'613b5fb',commitDate:'2026-09-29T22:26:00Z',wowVersion:'12.1.0.69933',dataHash:'h1'};
+  const args={installedWow:'12.1.0.69933',live:live('12.1.0.69933','h1'),local,head:{...head('fa7a6dc','12.1.0.69933'),date:'2026-09-30T12:15:00Z'},nightly:{...nightly('b00b1e5','12.1.0.69933'),date:'2026-09-30T08:00:00Z'}};
+  const p=plan({...args,sourceOnly:true});
+  assert.equal(p.action,'source');assert.equal(p.engine.sha,'fa7a6dc');
+  assert.equal(plan({...args,sourceOnly:false}).action,'nightly','without the choice the nightly is taken');
+  assert.equal(plan({...args,sourceOnly:true,local:{...local,commit:'fa7a6dc',commitDate:'2026-09-30T12:15:00Z'}}).action,'none','already on head: a newer-looking nightly is not taken');
+});
