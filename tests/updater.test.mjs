@@ -114,3 +114,13 @@ test('following the latest commit on Windows builds GitHub head even when a newe
   assert.equal(plan({...args,sourceOnly:false}).action,'nightly','without the choice the nightly is taken');
   assert.equal(plan({...args,sourceOnly:true,local:{...local,commit:'fa7a6dc',commitDate:'2026-09-30T12:15:00Z'}}).action,'none','already on head: a newer-looking nightly is not taken');
 });
+
+test('a GitHub token is found for API calls, and a failed check does not claim SimC is current',async()=>{
+  const {githubToken}=await import('../lib/updater.mjs');
+  assert.equal(await githubToken({}),null);
+  assert.equal(await githubToken({SIMC_LAB_PUBLISH_TOKEN:' pub '}),'pub','the publish token on a server');
+  assert.equal(await githubToken({SIMC_LAB_GITHUB_TOKEN:'gh',SIMC_LAB_PUBLISH_TOKEN:'pub'}),'gh','a token of its own first');
+  const local={commit:'fa7a6dc',wowVersion:'12.1.0.69933',dataHash:'h1'};
+  const r=plan({installedWow:null,local,head:null,nightly:null,live:live('12.1.0.69933','h1'),sourceOnly:true});
+  assert.equal(r.action,'none');assert.match(r.reason,/could not be reached/);assert.doesNotMatch(r.reason,/newest commit/);
+});
