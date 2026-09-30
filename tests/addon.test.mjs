@@ -398,6 +398,23 @@ test("the addon writes its own /simc export that the app can import",async()=>{
   w.close();
 });
 
+test('an export without a specialization never replaces a good capture',async()=>{
+  const w=await loaded();
+  await w.run(`SimulationcraftAPI = { GetSimcProfile = function() return 'deathknight="Temulan"\\nspec=blood', nil end }
+    SlashCmdList.SIMCLAB("capture")`);
+  assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/spec=blood/);
+  // At logout the client may no longer say which specialization is active, and SimulationCraft writes spec=unknown.
+  await w.run(`SimulationcraftAPI.GetSimcProfile = function() return 'deathknight="Temulan"\\nspec=unknown', nil end
+    __mock.player.specIndex = 0 __mock.event("PLAYER_LOGOUT")`);
+  assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/spec=blood/,'the last good capture is kept');
+  assert.equal(await w.get('SimCLabDB.captureStatus.ok'),false);
+  // With the specialization readable, ours replaces an unknown one from SimulationCraft.
+  await w.run('__mock.player.specIndex = 1 SlashCmdList.SIMCLAB("capture")');
+  assert.equal(await w.get('SimCLabDB.captures["temulan-ravencrest"].source'),'SimCLab');
+  assert.match(await w.get('SimCLabDB.captures["temulan-ravencrest"].text'),/spec=blood/);
+  w.close();
+});
+
 test('the export falls back to ours only when SimulationCraft cannot deliver',async()=>{
   const w=await loaded();
   await w.run('SlashCmdList.SIMCLAB("capture")');
