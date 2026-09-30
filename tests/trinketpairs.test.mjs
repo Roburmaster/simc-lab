@@ -128,14 +128,14 @@ test('each trinket names its best partner',()=>{
 test('the job states what it will simulate before it starts',()=>{
   const spec={...arms,candidates:list,support:false,tank:null};
   assert.equal(specSteps(spec,64,2,'pairs'),2*(1+3));
-  assert.equal(specSteps(spec,64,2,'single'),2);
+  assert.equal(specSteps(spec,64,2,'statstick'),2);
   assert.equal(specSteps({...spec,tank:{}},2,1,'pairs'),2+3+1);
   const plan={specs:[spec],finalists:64,model:'pairs',pool:4,pairFinalists:3};
   const e=estimate(plan,3);
   assert.equal(e.specs[0].pool,4);assert.equal(e.specs[0].pairs,6);assert.equal(e.specs[0].finals,3);
   assert.equal(e.specs[0].profilesets,3*(list.length+6+3));
   assert.equal(e.runs,3*4);
-  assert.equal(estimate({...plan,model:'single'},1).pairs,0);
+  assert.equal(estimate({...plan,model:'statstick'},1).pairs,0);
 });
 
 test('reference metadata names the profile and hashes what SimC is given',()=>{
@@ -255,7 +255,7 @@ test('Bloodmallet parity builds the same input Bloodmallet does',async()=>{
 
 test('the stat stick model keeps a neutral second trinket in the baseline and beside every candidate',async()=>{
   const {statStickProfile,parityProfile,models}=await import('../lib/trinkets.mjs');
-  assert.equal(models.statstick,'Single trinkets beside a stat stick');
+  assert.equal(models.statstick,'Stat stick tier list only');assert.equal(models.pairs,'Stat stick tier list and best pairs');
   const p=statStickProfile(arms,299);
   assert.ok(p.text.endsWith('\ntrinket2=,id=142508,bonus_id=607,ilevel=299'),'strength stick for Arms, at the lowest step');
   assert.equal(/potion=/.test(p.text.split('trinket2=')[1]),false,'no forced potion outside parity');
@@ -297,4 +297,9 @@ test('an embellished trinket is worn in place of an embellishment the gear can g
   assert.equal(pairLegal(dw,out[2],{equipped,itemLimits:limits}),true);
   assert.equal(pairLegal(dw,other,{equipped,itemLimits:limits}),false,'both give up the bracers');
   assert.equal(pairLegal(doff,other,{equipped,itemLimits:limits}),true,'one gives up the bracers, the other the off-hand');
+});
+
+test('the other slot is never left empty: only stat stick models are offered',async()=>{
+  const {models}=await import('../lib/trinkets.mjs');
+  assert.deepEqual(Object.keys(models),['pairs','statstick']);
 });

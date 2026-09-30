@@ -11,7 +11,7 @@ if(!request.trinkets.steps.length)delete request.trinkets.steps;
 const job=await post('/api/jobs',request);
 assert.equal(job.settings.iterations,60000);assert.equal(job.settings.targetError,0.1);assert.equal(job.settings.duration,300);
 assert.deepEqual(job.scenarios.map(s=>[s.style,s.targets]),[['CastingPatchwerk',1]]);
-assert.equal(job.trinkets.model,'single');assert.equal(job.trinkets.repro.parity.shaMatches,true);
+assert.equal(job.trinkets.model,'statstick');assert.equal(job.trinkets.repro.parity.shaMatches,true);
 let result;for(let i=0;i<24*3600;i++){result=await(await fetch(base+'/api/jobs/'+job.id)).json();if(!['queued','running'].includes(result.status))break;if(i%60===0)console.log(`${result.done}/${result.total} ${result.current?.name||''}`);await new Promise(r=>setTimeout(r,1000));}
 assert.equal(result.status,'complete',JSON.stringify(result.stages)+result.log);
 const stage=result.stages.find(s=>s.stem);
