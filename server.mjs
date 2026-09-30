@@ -13,6 +13,7 @@ import {presets as tankPresets,isTank} from './lib/tank.mjs';
 import {loadReferenceSpecs,publicSpec,clearReferenceCache,craftedItemLevel,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
 import {tierListPage} from './lib/tierpage.mjs';
 import {trinketListPage} from './lib/trinketpage.mjs';
+import {siteReport} from './lib/sitereport.mjs';
 import {limits as trinketLimits,trinketSteps,levelSteps,scenarioPresets} from './lib/trinkets.mjs';
 import {upgradeReportPage} from './lib/upgradepage.mjs';
 import {healerWeights,contents as healerContents} from './lib/healers.mjs';
@@ -137,6 +138,14 @@ const server=http.createServer(async(req,res)=>{
       const filename=`weapon-tier-list-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
       return res.end(html);
+    }
+    // The same job in the website's own form, for mythicpersona.com's Trinket Lab section.
+    const trinketSite=route.match(/^\/trinket-lab\/([\da-f-]{36})\.json$/);
+    if(req.method==='GET'&&trinketSite){
+      const job=jobs.jobs.get(trinketSite[1]);
+      if(!job?.trinkets)return json(res,404,{error:'No Trinket Lab job with that id.'});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="trinket-lab-${new Date(job.finished||job.created).toISOString().slice(0,10)}.json"`});
+      return res.end(JSON.stringify(siteReport(jobs.public(job)),null,2));
     }
     const trinketList=route.match(/^\/trinket-tier-list\/([\da-f-]{36})\.html$/);
     if(req.method==='GET'&&trinketList){
