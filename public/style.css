@@ -114,3 +114,8 @@
 .crest-plan-box{margin-bottom:14px}
 @media (max-width:700px){.crest-plan li{grid-template-columns:auto 1fr}.crest-plan li>span:nth-child(3),.crest-plan li>b{grid-column:2}.crest-plan b{text-align:left}}
 .armory-import{margin-bottom:16px;border:1px solid var(--line);border-radius:7px;padding:12px 14px;background:#141a25}.armory-row{display:grid;grid-template-columns:90px 1fr 1fr auto;gap:10px;align-items:end;margin-top:14px}.armory-import .hint{margin:10px 0 0}.character .pill+.pill{margin-left:8px}@media(max-width:720px){.armory-row{grid-template-columns:1fr 1fr}}
+
+.table-scroll{overflow-x:auto}
+.pair-table td:nth-child(2),.pair-table th:nth-child(2),.pair-table td:first-child,.pair-table th:first-child{text-align:left;white-space:normal}
+.pair-table td:nth-child(2){min-width:220px}
+.pair-table td:nth-child(2) a:first-child{margin-left:0}

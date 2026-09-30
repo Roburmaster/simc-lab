@@ -20,7 +20,8 @@ export function engineUI({api,notice}){
       <p>Commit<br><code>${esc(e.commit||'—')}</code></p>
       <div class="engine-actions"><button class="button small primary" data-update="auto">Update SimC</button><button class="button small secondary" data-check>Check for updates</button></div>
       <div id="engine-check" class="hint"></div><div class="update-progress" data-progress></div>
-      <details><summary>Advanced</summary><p class="hint">${linux?'Build from source downloads the SimC source and compiles it with the system’s Git, CMake and C++ compiler. It needs about 8 GB and takes 20–40 minutes; SIMC_LAB_BUILD_JOBS limits the compiler jobs on a small machine.':'Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.'}</p><div class="engine-actions"><button class="button small secondary" data-update="source">Build from source</button><button class="button small secondary" data-update="data">Refresh game data only</button></div></details>
+      <details><summary>Advanced</summary><p class="hint">${linux?'Build from source downloads the SimC source and compiles it with the system’s Git, CMake and C++ compiler. It needs about 8 GB and takes 20–40 minutes; SIMC_LAB_BUILD_JOBS limits the compiler jobs on a small machine.':'Build from source downloads the SimC source and compiles it. The first build installs Git, CMake and the Visual Studio C++ tools with winget, needs about 8 GB and takes 20–40 minutes.'}</p><div class="engine-actions"><button class="button small secondary" data-update="source">Build from source</button><button class="button small secondary" data-update="data">Refresh game data only</button></div>
+        <p class="hint">Install one exact SimC commit, to compare with a result made on it (Trinket Lab's Bloodmallet parity check). It must be for the WoW build you have installed; the next ordinary update moves on again.</p><div class="engine-actions"><input id="engine-pin" type="text" placeholder="SimC commit, e.g. a69b069" spellcheck="false" autocomplete="off"><button class="button small secondary" data-pin>Install this commit</button></div></details>
       ${desktop?`<div class="divider"></div><p>SimC Lab<br><strong>${esc(s.app?.version||'')}</strong></p><div class="engine-actions"><button class="button small secondary" data-app-check>Check for app updates</button><button class="button small primary" data-app-install hidden>Restart and update</button></div><div class="hint" id="app-update"></div>`:''}`;
     const missing=!e.ready||!!s.loadError;
     $('#setup-panel').hidden=!missing;
@@ -40,8 +41,8 @@ export function engineUI({api,notice}){
     }catch(err){target.textContent=err.message;}
   }
 
-  async function start(mode){
-    try{await api('/api/engine/update',{mode});}catch(err){notice(err.message);return;}
+  async function start(mode,sha){
+    try{await api('/api/engine/update',{mode,...(sha?{sha}:{})});}catch(err){notice(err.message);return;}
     document.querySelectorAll('[data-update]').forEach(b=>b.disabled=true);
     poll();
   }
@@ -59,6 +60,7 @@ export function engineUI({api,notice}){
   document.addEventListener('click',event=>{
     const update=event.target.closest('[data-update]');if(update){start(update.dataset.update);return;}
     if(event.target.closest('[data-check]'))check();
+    if(event.target.closest('[data-pin]')){const sha=$('#engine-pin').value.trim();if(sha)start('source',sha);}
     if(event.target.closest('[data-app-check]'))desktop.checkForUpdates();
     if(event.target.closest('[data-app-install]'))desktop.installUpdate();
   });
