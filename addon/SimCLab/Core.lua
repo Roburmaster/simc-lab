@@ -581,6 +581,10 @@ function ns.Capture()
       -- That export doubles pipes for its edit box; the text SimC reads has single ones.
       profile = text:gsub("||", "|")
       source = "SimulationCraft addon"
+      -- Its export says spec=unknown, with no talents, when the game gives no specialization at that moment.
+      if profile:find("\nspec=unknown", 1, true) then
+        profile, source, why = nil, nil, "SimulationCraft could not read the specialization"
+      end
     end
   end
   -- Without it, SimCLab writes the export itself.
@@ -594,6 +598,9 @@ function ns.Capture()
     end
   end
   local specId, specName = specInfo()
+  -- At logout the game may already have stopped answering which specialization is active. An export without one
+  -- cannot be simulated, so the last good capture is kept rather than overwritten.
+  if not specId then return captureFailed("the game did not report a specialization; the last capture is kept") end
   -- The English name for the app's list; the client's own name is translated.
   specName = (specId and ns.SPECS and ns.SPECS[specId]) or specName or nil
   local captures = SimCLabDB.captures
