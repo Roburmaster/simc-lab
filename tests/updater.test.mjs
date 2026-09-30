@@ -45,8 +45,18 @@ test('a newer source commit for the same WoW build never triggers a compile',()=
   assert.equal(p.action,'nightly');assert.equal(p.engine.sha,'older');
 });
 
-test('an installed engine for the current WoW build is kept, even a source build newer than the nightly',()=>{
-  const local={commit:'mine',wowVersion:'12.1.0.69875',dataHash:'h1'};
+test('a newer nightly for the same WoW build replaces the engine; the same or an older one does not',()=>{
+  const local={commit:'old',commitDate:'2026-09-10T00:00:00Z',wowVersion:'12.1.0.69875',dataHash:'h1'};
+  const args={installedWow:'12.1.0.69875',head:head('newest','12.1.0.69875'),live:live('12.1.0.69875','h1')};
+  const p=plan({...args,local,nightly:nightly('fresh','12.1.0.69875')});
+  assert.equal(p.action,'nightly','22 commits behind was kept before: now the nightly is installed');assert.equal(p.engine.sha,'fresh');
+  assert.equal(plan({...args,local:{...local,commit:'fresh'},nightly:nightly('fresh','12.1.0.69875')}).action,'none','already on the nightly');
+  assert.equal(plan({...args,local:{...local,commit:'mine',commitDate:'2026-09-20T00:00:00Z'},nightly:nightly('older','12.1.0.69875')}).action,'none','a source build newer than the nightly is kept');
+  assert.equal(plan({...args,local,nightly:nightly('fresh','12.1.5.70000')}).action,'none','a nightly for another WoW build is not taken');
+});
+
+test('an installed engine newer than the nightly is kept for the current WoW build',()=>{
+  const local={commit:'mine',commitDate:'2026-09-19T00:00:00Z',wowVersion:'12.1.0.69875',dataHash:'h1'};
   const args={installedWow:'12.1.0.69875',head:head('newer','12.1.0.69875'),nightly:nightly('older','12.1.0.69875')};
   assert.equal(plan({...args,local,live:live('12.1.0.69875','h1')}).action,'none');
   assert.equal(plan({...args,local,live:live('12.1.0.69875','h2')}).action,'data');

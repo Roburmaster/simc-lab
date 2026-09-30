@@ -13,7 +13,7 @@ import {presets as tankPresets,isTank} from './lib/tank.mjs';
 import {loadReferenceSpecs,publicSpec,clearReferenceCache,craftedItemLevel,weaponSteps,kinds as weaponKindNames,limits as weaponLimits} from './lib/weapons.mjs';
 import {tierListPage} from './lib/tierpage.mjs';
 import {trinketListPage} from './lib/trinketpage.mjs';
-import {limits as trinketLimits,trinketSteps,levelSteps} from './lib/trinkets.mjs';
+import {limits as trinketLimits,trinketSteps,levelSteps,scenarioPresets} from './lib/trinkets.mjs';
 import {upgradeReportPage} from './lib/upgradepage.mjs';
 import {healerWeights,contents as healerContents} from './lib/healers.mjs';
 import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from './lib/engine.mjs';
@@ -69,7 +69,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/status')return json(res,200,{engine:await engineStatus(),expansion:catalog?.expansion||null,loadError,token,app:appInfo});
     if(req.method==='GET'&&route==='/api/engine/update')return json(res,200,updater.state);
     if(req.method==='POST'&&route==='/api/engine/check')return json(res,200,await updater.check());
-    if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto'}=await body(req);if(!['auto','nightly','source','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode));}
+    if(req.method==='POST'&&route==='/api/engine/update'){const {mode='auto',sha=null}=await body(req);if(!['auto','nightly','source','data'].includes(mode))throw new Error('Unknown update mode.');return json(res,202,updater.start(mode,sha||null));}
     if(req.method==='GET'&&route==='/api/wow')return json(res,200,await wow.status());
     if(req.method==='POST'&&route==='/api/wow/install')return json(res,200,await wow.install());
     if(req.method==='POST'&&route==='/api/wow/uninstall')return json(res,200,await wow.uninstall());
@@ -111,13 +111,13 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/trinket-specs'){
       const specs=await loadReferenceSpecs(engine.source,talentData);
       return json(res,200,{specs:specs.filter(s=>!s.healer).map(publicSpec),healers:specs.filter(s=>s.healer).map(s=>s.label),tracks:season.tracks,difficulties:season.difficulties,
-        steps:levelSteps(season,season.tracks.map(t=>t.id)),defaultSteps:levelSteps(season).map(s=>s.track),craftedCap:await craftedItemLevel(engine.source),limits:trinketLimits,season:season.season});
+        steps:levelSteps(season,season.tracks.map(t=>t.id)),defaultSteps:levelSteps(season).map(s=>s.track),craftedCap:await craftedItemLevel(engine.source),limits:trinketLimits,scenarios:scenarioPresets,engine:await engineStatus().then(e=>({version:e.version,commit:e.commit})),season:season.season});
     }
     if(req.method==='POST'&&route==='/api/preview'){
       const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists,embellished:plan.upgrade.candidates.filter(c=>c.embellishment).length,blocked:plan.upgrade.blocked,limitsUsed:plan.upgrade.limitsUsed,steps:upgradeSteps(plan.upgrade,plan.scenarios.length)};
       const crests=plan.crests&&{affordable:plan.crests.affordable,candidates:plan.crests.candidates.length,items:plan.crests.items,budget:plan.crests.budget,state:plan.crests.state};
       const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,healers:plan.weapons.specs.filter(s=>s.healer).length,craftedStats:plan.weapons.craftedStats.length,sources:plan.weapons.sources,levels:plan.weapons.levels,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
-      const trinkets=plan.trinkets&&{specs:plan.trinkets.specs.length,trinkets:plan.trinkets.trinkets,candidates:plan.trinkets.candidates,skipped:plan.trinkets.skipped,tanks:plan.trinkets.specs.filter(s=>s.tank).length,sources:plan.trinkets.sources,levels:plan.trinkets.levels,steps:trinketSteps(plan.trinkets,plan.scenarios.length),screened:plan.trinkets.specs.filter(s=>new Set(s.candidates.map(c=>c.itemId)).size>plan.trinkets.finalists).length};
+      const trinkets=plan.trinkets&&{specs:plan.trinkets.specs.length,trinkets:plan.trinkets.trinkets,candidates:plan.trinkets.candidates,skipped:plan.trinkets.skipped,tanks:plan.trinkets.specs.filter(s=>s.tank).length,sources:plan.trinkets.sources,levels:plan.trinkets.levels,steps:trinketSteps(plan.trinkets,plan.scenarios.length),model:plan.trinkets.model,estimate:plan.trinkets.estimate,screened:plan.trinkets.specs.filter(s=>new Set(s.candidates.map(c=>c.itemId)).size>plan.trinkets.finalists).length};
       return json(res,200,{trinkets,variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:trinkets?trinkets.steps:weapons?weapons.steps:crests?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}

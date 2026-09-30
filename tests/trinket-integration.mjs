@@ -10,7 +10,7 @@ assert.ok(data.specs.every(s=>!s.healer&&!s.text),'no healers, and the profile t
 assert.ok(data.healers.length>=5,'the healers left out are named');
 const specs=['warrior-arms','warrior-protection'];
 // A final round of 16 is smaller than either list, so both screening and the final round run.
-const request={mode:'trinkets',trinkets:{specs,finalists:16},tank:{preset:'dungeon',weight:50},iterations:300,duration:60,threads:8,targetError:0,scenarios:[{style:'Patchwerk',targets:1}]};
+const request={mode:'trinkets',trinkets:{specs,finalists:16,model:'single'},tank:{preset:'dungeon',weight:50},iterations:300,duration:60,threads:8,targetError:0,scenarios:[{style:'Patchwerk',targets:1}]};
 const preview=await post('/api/preview',request);
 const t=preview.trinkets;
 assert.equal(t.specs,2);assert.equal(t.tanks,1);assert.equal(t.screened,2);
@@ -24,7 +24,7 @@ assert.equal(result.done,result.total);
 for(const spec of result.trinkets.specs){
   const byKey=new Map(spec.candidates.map(c=>[c.key,c]));
   const items=new Set(spec.candidates.map(c=>c.itemId));
-  const ranked=result.results.filter(r=>r.spec===spec.key&&!r.superseded&&Number.isFinite(r.rank)).sort((a,b)=>a.rank-b.rank);
+  const ranked=result.results.filter(r=>r.spec===spec.key&&!r.pair&&!r.superseded&&Number.isFinite(r.rank)).sort((a,b)=>a.rank-b.rank);
   assert.equal(ranked.length,items.size,`${spec.key}: every trinket is ranked once`);
   assert.ok(ranked.every(r=>byKey.get(r.key).top),`${spec.key}: the tier is read at each trinket's top level`);
   assert.ok(ranked.every((r,i)=>r.rank===i+1&&'SABCD'.includes(r.tier)),`${spec.key}: ranks run without a gap and all have a tier`);
