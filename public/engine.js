@@ -33,6 +33,7 @@ export function engineUI({api,notice}){
     try{
       const c=await api('/api/engine/check',{});
       const lines=[c.decision.reason];
+      if(Number.isFinite(c.local?.behind))lines.push(c.local.behind?`Installed SimC ${String(c.local.commit).slice(0,7)} is ${c.local.behind} commit${c.local.behind===1?'':'s'} behind GitHub (${c.head.branch}).`:'Installed SimC is the newest commit on GitHub.');
       if(c.nightly)lines.push(`Newest official build: ${c.nightly.version} for WoW ${c.nightly.wowVersion} (${when(c.nightly.date)})`);
       if(c.head)lines.push(`Newest source: ${c.head.sha.slice(0,7)} for WoW ${c.head.wowVersion} (${when(c.head.date)})`);
       if(c.live)lines.push(`Game data: WoW ${c.live.wowBuild}`);
