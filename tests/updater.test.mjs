@@ -78,3 +78,14 @@ test('at start, only an official build or new game data is installed by itself',
   busy.check=async()=>{throw new Error('must not check while simulations run');};
   assert.equal(await busy.startup(),null);
 });
+
+test('where there are no official builds (Linux), a newer commit on GitHub is built from source',()=>{
+  const local={commit:'old',commitDate:'2026-09-27T15:27:00Z',wowVersion:'12.1.0.69933',dataHash:'h1'};
+  const args={installedWow:null,live:live('12.1.0.69933','h1'),nightly:null,sourceOnly:true};
+  const p=plan({...args,local,head:{...head('fa7a6dc','12.1.0.69933'),date:'2026-09-30T12:15:00Z'}});
+  assert.equal(p.action,'source','16 commits behind was kept before');assert.equal(p.engine.sha,'fa7a6dc');
+  assert.match(p.reason,/newer SimC commits/);
+  const same=plan({...args,local:{...local,commit:'fa7a6dc'},head:{...head('fa7a6dc','12.1.0.69933'),date:'2026-09-30T12:15:00Z'}});
+  assert.equal(same.action,'none');assert.match(same.reason,/newest commit on GitHub/);
+  assert.equal(plan({...args,local,head:{...head('fa7a6dc','12.1.0.69933'),date:'2026-09-30T12:15:00Z'},sourceOnly:false}).action,'none','with nightlies (Windows) a source commit alone never compiles');
+});
