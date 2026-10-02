@@ -2,7 +2,7 @@
   "name": "simc-lab",
   "productName": "SimC Lab",
   "desktopName": "simc-lab.desktop",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "description": "Local SimulationCraft workbench with upgrade finder and tank simulation.",
   "author": "Roburmaster",
   "private": true,
