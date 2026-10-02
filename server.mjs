@@ -27,6 +27,7 @@ import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
 import {importArmory,isArmoryProfile} from './lib/armory.mjs';
 import {logsDir,listLogs,logPath,scanLog,readPlayer} from './lib/combatlog.mjs';
 import {analyserFor,supported as analysedSpecs,simCastsPerMinute,simRotation} from './lib/analysis/index.mjs';
+import {fightSetup,align,simCasts,logCasts} from './lib/analysis/compare.mjs';
 const port=Number(process.env.PORT || 8642);
 const pkg=JSON.parse(await fs.readFile(new URL('./package.json',import.meta.url),'utf8'));
 const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP,platform:process.platform};const token=randomBytes(32).toString('hex');
@@ -106,6 +107,32 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET'&&route==='/api/wow/captures')return json(res,200,await wow.captures());
     if(req.method==='GET'&&route==='/api/logs'){const dir=await logsDir(await engine.wowInstallDir());return json(res,200,{dir,files:await listLogs(dir),specs:analysedSpecs});}
     if(req.method==='POST'&&route==='/api/logs/scan'){const {file}=await body(req);return json(res,200,await startScan(file));}
+    // One fight read and analysed, for the simulation and the comparison that follow an analysis.
+    const loggedFight=async({file,fight:id,player})=>{
+      const state=await startScan(file);if(state.status!=='done')throw new Error('Scan the log first.');
+      const fight=state.scan.fights.find(f=>f.id===Number(id));if(!fight)throw new Error('Choose a fight.');
+      const data=await readPlayer(logPath(await logsDir(await engine.wowInstallDir()),file),fight,String(player));
+      const analyser=analyserFor(data);if(!analyser)throw new Error(`Rotation analysis is not available for this specialization yet. Analysed so far: ${analysedSpecs.join(', ')}.`);
+      return {fight,data,analysis:analyser.analyse(data)};
+    };
+    // Simulate the fight from the Log Analysis tab: the character's addon export, the matching fight, no buffs.
+    if(req.method==='POST'&&route==='/api/logs/simulate'){
+      ready();if(updater.switching)throw new Error('SimC is switching to the new engine. Try again in a moment.');
+      const input=await body(req);const {fight,data,analysis}=await loggedFight(input);
+      const capture=(await wow.captures()).characters?.find(c=>c.key===String(input.character));
+      if(!capture?.text)throw new Error('This character has no export from the SimCLab addon. Log in with it and type /simc, or use Quick Sim.');
+      const {label,...scenario}=fightSetup(fight,data,analysis);
+      const request={profile:capture.text,mode:'quick',iterations:Number(input.iterations)||10000,targetError:0.2,duration:scenario.duration,threads:Number(input.threads)||engine.maxThreads,
+        environment:{buffs:Object.fromEntries(buffs.map(b=>[b.id,false])),variation:0,bloodlust:{mode:'pull',value:0},consumables:{food:'none',flask:'none',potion:'none',augmentation:'none',main_hand_oil:'none',off_hand_oil:'none'}},scenarios:[scenario]};
+      const plan=await prepare(request,catalog,talentData,season);
+      return json(res,201,{...jobs.public(await jobs.add(plan,request)),setup:{...scenario,label}});
+    }
+    // SimC's sample sequence set against the log, cast by cast.
+    if(req.method==='POST'&&route==='/api/logs/compare'){
+      const input=await body(req);const {analysis}=await loggedFight(input);const {report,row}=await jobReport(input.job);
+      const rotation=simRotation(report);
+      return json(res,200,{...align(simCasts(rotation.sequence),logCasts(analysis.casts)),simDps:row.dps,logDps:analysis.dps,length:analysis.length});
+    }
     if(req.method==='POST'&&route==='/api/logs/analyse'){
       const {file,fight:id,player,job}=await body(req);const state=await startScan(file);if(state.status!=='done')throw new Error('Scan the log first.');
       const fight=state.scan.fights.find(f=>f.id===Number(id));if(!fight)throw new Error('Choose a fight.');
