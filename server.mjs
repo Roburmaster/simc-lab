@@ -25,6 +25,8 @@ import {loadSettings,saveSettings} from './lib/settings.mjs';
 import {WowAddon} from './lib/wowaddon.mjs';
 import {identity,simEntry,trackTable,sendableModes} from './lib/wowdata.mjs';
 import {importArmory,isArmoryProfile} from './lib/armory.mjs';
+import {logsDir,listLogs,logPath,scanLog,readPlayer} from './lib/combatlog.mjs';
+import {analyserFor,supported as analysedSpecs,simCastsPerMinute,simRotation} from './lib/analysis/index.mjs';
 const port=Number(process.env.PORT || 8642);
 const pkg=JSON.parse(await fs.readFile(new URL('./package.json',import.meta.url),'utf8'));
 const appInfo={name:'SimC Lab',version:pkg.version,desktop:!!process.env.SIMC_LAB_DESKTOP,platform:process.platform};const token=randomBytes(32).toString('hex');
@@ -54,6 +56,26 @@ jobs.onFinished=async job=>{
 };
 wow.autoUpdate().catch(e=>console.error('SimCLab addon update failed:',e.message));
 const ready=()=>{if(!catalog)throw new Error(loadError||'SimC is not installed yet. Use Update SimC.');};
+// Combat log scans, kept per file while it is unchanged (name, size and time); a big file takes a while, so a scan
+// runs in the background and the page asks how far it has come.
+const scans=new Map();
+async function startScan(name){
+  const dir=await logsDir(await engine.wowInstallDir());const file=logPath(dir,name);const stat=await fs.stat(file);
+  const key=`${name}|${stat.size}|${stat.mtimeMs}`;let scan=scans.get(name);
+  if(!scan||scan.key!==key){
+    scan={key,status:'scanning',progress:0};scans.set(name,scan);
+    scanLog(file,p=>{scan.progress=p;}).then(result=>Object.assign(scan,{status:'done',result}),e=>Object.assign(scan,{status:'failed',error:e.message}));
+  }
+  return {status:scan.status,progress:scan.progress,error:scan.error,...(scan.status==='done'?{scan:scan.result}:{})};
+}
+// A finished simulation to compare with: its first completed result's report.
+async function jobReport(id,stem){
+  const job=jobs.jobs.get(String(id));if(!job)throw new Error('Simulation not found.');
+  const row=stem?job.results.find(r=>r.stem===stem):job.results.find(r=>r.status==='complete'&&r.baseline)||job.results.find(r=>r.status==='complete');
+  if(!row||row.status!=='complete')throw new Error('That simulation has no finished result.');
+  const dir=path.join(runsDir,job.id);
+  return {job,row,report:JSON.parse(await fs.readFile(path.join(dir,row.stem+'.json'),'utf8')),apl:await fs.readFile(path.join(dir,row.stem+'.apl.simc'),'utf8').catch(()=>'')};
+}
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>600000)throw new Error('The request is too large.');}return JSON.parse(text);}
 const server=http.createServer(async(req,res)=>{
@@ -82,6 +104,17 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'&&route==='/api/wow/settings')return json(res,200,await wow.settings(await body(req)));
     if(req.method==='POST'&&route==='/api/wow/remove'){const {id}=await body(req);return json(res,200,await wow.remove(String(id)));}
     if(req.method==='GET'&&route==='/api/wow/captures')return json(res,200,await wow.captures());
+    if(req.method==='GET'&&route==='/api/logs'){const dir=await logsDir(await engine.wowInstallDir());return json(res,200,{dir,files:await listLogs(dir),specs:analysedSpecs});}
+    if(req.method==='POST'&&route==='/api/logs/scan'){const {file}=await body(req);return json(res,200,await startScan(file));}
+    if(req.method==='POST'&&route==='/api/logs/analyse'){
+      const {file,fight:id,player,job}=await body(req);const state=await startScan(file);if(state.status!=='done')throw new Error('Scan the log first.');
+      const fight=state.scan.fights.find(f=>f.id===Number(id));if(!fight)throw new Error('Choose a fight.');
+      const data=await readPlayer(logPath(await logsDir(await engine.wowInstallDir()),file),fight,String(player));
+      const analyser=analyserFor(data);if(!analyser)throw new Error(`Rotation analysis is not available for this specialization yet. Analysed so far: ${analysedSpecs.join(', ')}.`);
+      const compare=job?await jobReport(job):null;
+      const potions=[...new Set((catalog?.consumables.potion||[]).map(p=>p.name.replace(/\s*\(.*\)$/,'')))];
+      return json(res,200,{...analyser.analyse(data,{sim:compare?simCastsPerMinute(compare.report):null,potions}),fight:{id:fight.id,kind:fight.kind,name:fight.name,length:fight.length},...(compare?{compare:{job:compare.job.id,name:compare.job.name,dps:compare.row.dps,scenario:compare.job.scenarios[compare.row.scenario]}}:{})});
+    }
     if(req.method==='POST'&&route==='/api/wow/send'){const {job:id}=await body(req);const job=jobs.jobs.get(String(id));if(!job)return json(res,404,{error:'Job not found.'});return json(res,200,await sendToWow(job,{auto:false}));}
     if(route!=='/api/jobs'&&route.startsWith('/api/')&&!route.startsWith('/api/jobs/')&&route!=='/api/status')ready();
     if(req.method==='GET'&&route==='/api/options')return json(res,200,{buffs,consumables:catalog.consumables,expansion:catalog.expansion,tankPresets});
@@ -128,6 +161,8 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.switching)throw new Error('SimC is switching to the new engine. Try again in a moment.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
     if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs());
     if(req.method==='GET'&&route==='/api/jobs')return json(res,200,[...jobs.jobs.values()].reverse().map(j=>({id:j.id,name:j.name,mode:j.mode,status:j.status,created:j.created,done:j.done,total:j.total,fraction:jobFraction(j)})));
+    const rotation=route.match(/^\/api\/jobs\/([\da-f-]{36})\/rotation(?:\/(\d{3}))?$/);
+    if(req.method==='GET'&&rotation){const {report,apl,row}=await jobReport(rotation[1],rotation[2]);return json(res,200,{...simRotation(report,apl),stem:row.stem,variant:row.name,dps:row.dps});}
     const jobRoute=route.match(/^\/api\/jobs\/([\da-f-]{36})(\/cancel)?$/);
     if(jobRoute){const job=jobs.jobs.get(jobRoute[1]);if(!job)return json(res,404,{error:'Job not found.'});if(req.method==='POST'&&jobRoute[2])return json(res,200,await jobs.cancel(job.id));if(req.method==='GET'&&!jobRoute[2])return json(res,200,{...jobs.public(job),queue:jobs.queueFor(job),fraction:jobFraction(job)});}
     // The tier list is written here rather than by SimC, and carries no script, so it can be read in place.
@@ -176,7 +211,7 @@ const server=http.createServer(async(req,res)=>{
       // Reports are generated by SimC. Serve downloads so their scripts never share this app's origin.
       res.writeHead(200,{'Content-Type':ext==='.json'?'application/json':'application/octet-stream','Content-Disposition':`attachment; filename="${report[2]}"`});return res.end(data);
     }
-    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/vault.js':'vault.js','/weapons.js':'weapons.js','/trinkets.js':'trinkets.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/armory.js':'armory.js','/style.css':'style.css'};
+    const assets={'/':'index.html','/app.js':'app.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/vault.js':'vault.js','/weapons.js':'weapons.js','/trinkets.js':'trinkets.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/logs.js':'logs.js','/armory.js':'armory.js','/style.css':'style.css'};
     if(req.method==='GET'&&assets[route]){const file=assets[route];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(await fs.readFile(path.join(root,'public',file)));}
     json(res,404,{error:'Not found.'});
   }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}
