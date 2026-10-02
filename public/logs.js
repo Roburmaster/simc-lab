@@ -11,7 +11,7 @@ const lanes=['Recklessness','Avatar','Bladestorm',"Odyn's Fury",'Thunderous Roar
 // Log Analysis: pick a combat log, a fight and a player, and see what the rotation did and what to change, beside a
 // finished simulation of the same character when one is chosen.
 export function logsUI({api,notice}){
-  let files=[],scan=null,polling=null,characters=[];
+  let files=[],scan=null,polling=null,characters=[],current=null;
   const store={get:k=>{try{return localStorage.getItem(k);}catch{return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch{}}};
   $('#history').insertAdjacentHTML('afterend',`<section id="logs-panel" class="panel logs-panel" hidden>
     <div class="panel-heading"><h2>Analyse a combat log</h2><span class="pill" id="logs-specs"></span></div>
@@ -67,16 +67,21 @@ export function logsUI({api,notice}){
   }
   async function analyse(id){
     const row=document.querySelector(`[data-analyse="${id}"]`).closest('tr');const player=row.dataset.player,name=row.dataset.playerName;
+    current={file:scan.file,fight:id,player,character:$('#log-character').value,name};
     // Finished simulations of the same character, newest first, to set the rotation beside.
     let sims=[];try{sims=(await api('/api/jobs')).filter(j=>['complete','partial'].includes(j.status)&&['quick','compare','enchants','talents'].includes(j.mode)&&String(j.name).toLowerCase()===name.toLowerCase()).sort((a,b)=>String(b.created).localeCompare(String(a.created)));}catch{}
     $('#log-report').innerHTML=`<div class="log-compare"><label>Compare with a simulation<select id="log-compare"><option value="">No comparison</option>${sims.map(j=>`<option value="${esc(j.id)}">${esc(j.name)} · ${when(j.created)}</option>`).join('')}</select></label><p class="hint">${sims.length?'SimC’s casts per minute from that simulation are shown beside yours.':`No finished simulation of ${esc(name)} yet. Run a Quick Sim of the same character (for dummies, the Silvermoon dummies fight style) to compare.`}</p></div><div id="log-result">Analysing …</div>`;
-    const run=async()=>{try{render(await api('/api/logs/analyse',{file:scan.file,fight:id,player,job:$('#log-compare').value||null}));}catch(e){$('#log-result').innerHTML=`<p class="notice">${esc(e.message)}</p>`;}};
+    const run=async()=>{try{render(await api('/api/logs/analyse',{file:scan.file,fight:id,player,job:$('#log-compare').value||null}));await sideBySide($('#log-compare').value||null);}catch(e){$('#log-result').innerHTML=`<p class="notice">${esc(e.message)}</p>`;}};
+    current.rerun=run;
     $('#log-compare').onchange=run;if(sims[0]){$('#log-compare').value=sims[0].id;}await run();
   }
+  let lastReport=null;
   function render(r){
+    lastReport=r;
     const icon={warning:'!',tip:'→',good:'✓'};
     const timeline=lanes.filter(l=>r.casts.some(c=>c.name===l)).map(l=>`<div class="lane"><span>${esc(l)}</span><div>${r.casts.filter(c=>c.name===l).map(c=>`<i style="left:${Math.max(0,Math.min(100,100*c.t/r.length)).toFixed(2)}%" title="${esc(l)} at ${c.t.toFixed(1)} s"></i>`).join('')}</div></div>`).join('');
-    $('#log-result').innerHTML=`<div class="log-summary"><div><strong>${number(r.dps)}</strong><span>DPS · ${esc(short(r.name))} · ${esc(r.spec)}</span></div><div><strong>${clock(r.length)}</strong><span>${r.targets} target${r.targets===1?'':'s'}</span></div><div><strong>${r.uptime.enrage}%</strong><span>Enrage</span></div><div><strong>${r.uptime.recklessness}%</strong><span>Recklessness</span></div>${r.compare?`<div><strong>${number(r.compare.dps)}</strong><span>SimC · ${esc(r.compare.scenario?.style||'')}</span></div>`:''}</div>
+    $('#log-result').innerHTML=`<div class="log-sim" id="log-sim"></div><div class="log-summary"><div><strong>${number(r.dps)}</strong><span>DPS · ${esc(short(r.name))} · ${esc(r.spec)}</span></div><div><strong>${clock(r.length)}</strong><span>${r.targets} target${r.targets===1?'':'s'}</span></div><div><strong>${r.uptime.enrage}%</strong><span>Enrage</span></div><div><strong>${r.uptime.recklessness}%</strong><span>Recklessness</span></div>${r.compare?`<div><strong>${number(r.compare.dps)}</strong><span>SimC · ${esc(r.compare.scenario?.style||'')}</span></div>`:''}</div>
+      <div id="log-side"></div>
       <h3 class="upgrade-heading">What to change</h3><div class="log-findings">${r.findings.map(f=>`<div class="finding ${f.severity}"><span>${icon[f.severity]}</span><div><strong>${esc(f.title)}</strong><p>${esc(f.detail)}</p></div></div>`).join('')}</div>
       <h3 class="upgrade-heading">Casts over the fight</h3><div class="cast-timeline">${timeline}</div>
       <h3 class="upgrade-heading">Casts per minute${r.compare?' · you and SimC':''}</h3><table class="result-table"><thead><tr><th>Ability</th><th>Casts</th><th>Per minute</th>${r.compare?'<th>SimC per minute</th>':''}<th>Damage</th></tr></thead><tbody>${r.abilities.map(a=>`<tr><td>${esc(a.name)}</td><td>${a.casts}</td><td>${a.cpm}</td>${r.compare?`<td>${a.simCpm??'—'}</td>`:''}<td>${a.share?a.share+'%':'—'}</td></tr>`).join('')}</tbody></table>
@@ -85,6 +90,59 @@ export function logsUI({api,notice}){
       <details class="environment-detail"><summary>Damage by spell</summary><table class="result-table"><thead><tr><th>Spell</th><th>Damage</th><th>Share</th><th>Hits</th><th>Crit</th></tr></thead><tbody>${r.spells.map(s=>`<tr><td>${esc(s.name)}</td><td>${number(s.amount)}</td><td>${s.share}%</td><td>${s.hits}</td><td>${s.crit}%</td></tr>`).join('')}</tbody></table></details>
       <p class="hint">Rage: ${number(r.rage.gained)} gained, ${number(r.rage.wasted)} lost to the cap. Buffs you already had when the log started (flask, food, rune) do not show in a log.</p>`;
   }
+  // Simulate the fight right here: the character's addon export on the same targets, as long as they attacked, with
+  // the bleed tail and no buffs; then set SimC beside the log.
+  async function simulate(){
+    const box=$('#log-sim');box.innerHTML='<p class="hint">Starting the simulation …</p>';
+    try{
+      const job=await api('/api/logs/simulate',{...current,iterations:Number($('#iterations')?.value)||10000,threads:Number($('#threads')?.value)||undefined});
+      const s=job.setup;
+      for(;;){
+        const j=await api(`/api/jobs/${job.id}`);
+        const pct=Math.round(100*(j.fraction||0));
+        box.innerHTML=`<p class="hint">Simulating ${esc(s.label)} · ${s.duration} s${s.bleedTail?` + ${s.bleedTail} s of bleeds`:''} · no buffs … ${pct}%</p><div class="progress-track live"><div class="progress-fill" style="width:${pct}%"></div></div>`;
+        if(['complete','partial'].includes(j.status))break;
+        if(['failed','cancelled','interrupted'].includes(j.status))throw new Error(j.error||j.results?.[0]?.error||'The simulation did not finish.');
+        await new Promise(r=>setTimeout(r,1500));
+      }
+      const select=$('#log-compare');select.insertAdjacentHTML('afterbegin',`<option value="${esc(job.id)}">${esc(current.name)} · this fight · just now</option>`);select.value=job.id;
+      await current.rerun();
+    }catch(e){box.innerHTML=`<p class="notice">${esc(e.message)}</p>`;}
+  }
+  // SimC's sample sequence on the left, the log on the right; Compare sets them against each other.
+  async function sideBySide(job){
+    const box=$('#log-side');if(!box)return;
+    $('#log-sim').innerHTML=`<div class="engine-actions"><button class="button small primary" data-log-simulate>Simulate this fight</button></div><p class="hint">Simulates ${esc(current.name)} from the SimCLab addon export on the same targets, for as long as you attacked, with your bleed tail and no buffs (turn buffs on in Quick Sim when you had them).</p>`;
+    if(!job){box.innerHTML='';return;}
+    let rot,me;
+    try{rot=await api(`/api/jobs/${job}/rotation`);}catch(e){box.innerHTML=`<p class="notice">${esc(e.message)}</p>`;return;}
+    me=lastReport.casts;
+    const simRows=(rot.sequence||[]).filter(e=>!/^(auto_attack|berserker_stance|variable|snapshot_stats)$/.test(e.name));
+    box.innerHTML=`<h3 class="upgrade-heading">SimC beside you</h3>
+      <div class="engine-actions"><button class="button small primary" data-log-compare>Compare events</button><label class="check"><input type="checkbox" id="log-timeline">Timeline view</label></div>
+      <div id="log-compare-view"><div class="side-by-side"><div><h5>SimC · ${Math.round(rot.dps).toLocaleString('en-US')} DPS · one sample iteration</h5><ol class="cast-list">${simRows.map(e=>`<li><span>${e.t.toFixed(1)}</span>${esc(e.spell||e.name)}${e.rage!=null?`<small>${Math.round(e.rage)} rage</small>`:''}</li>`).join('')}</ol></div>
+      <div><h5>You · ${lastReport.dps.toLocaleString('en-US')} DPS</h5><ol class="cast-list">${me.map(c=>`<li><span>${c.t.toFixed(1)}</span>${esc(c.name)}</li>`).join('')}</ol></div></div></div>`;
+    box.dataset.job=job;
+  }
+  const kinds={same:'Same',late:'Later',early:'Earlier',missed:'SimC only',extra:'You only'};
+  async function compareEvents(){
+    const box=$('#log-compare-view');box.innerHTML='<p class="hint">Setting the casts against each other …</p>';
+    try{
+      const r=await api('/api/logs/compare',{...current,job:$('#log-side').dataset.job});const timeline=$('#log-timeline').checked;
+      const legend=`<div class="cmp-legend"><span class="cmp same">Same (within 1.5 s)</span><span class="cmp small">Small: shifted 1.5–4 s, or a one-off that may be chance</span><span class="cmp large">Large: shifted 4 s or more, or the same difference again and again</span><span class="cmp extra">You only</span><span class="cmp missed">SimC only</span></div>
+        <p class="hint">${r.summary.same} casts the same, ${r.summary.small} small and ${r.summary.large} large differences. SimC's side is one sample iteration with its own procs, so look for what repeats: ${r.summary.missed.slice(0,3).map(([k,n])=>`SimC used ${k.replaceAll('_',' ')} ${n} times you did not`).join(', ')}${r.summary.extra.length?`; you used ${r.summary.extra.slice(0,3).map(([k,n])=>`${k.replaceAll('_',' ')} ${n} times`).join(', ')} where SimC did not`:''}.</p>`;
+      const cls=row=>row.kind==='same'?'same':row.size==='large'?'large':row.kind==='extra'?'extra':row.kind==='missed'?'missed':'small';
+      if(timeline){
+        const end=Math.max(...r.rows.map(x=>Math.max(x.sim?.at||0,x.log?.at||0)),1);const x=t=>(100*t/end).toFixed(2);
+        const marks=side=>r.rows.filter(row=>row[side]).map(row=>`<i class="cmp-mark ${cls(row)}" style="left:${x(row[side].at)}%" title="${esc(row[side].at.toFixed(1)+' s · '+row[side].name+' — '+row.note)}"></i>`).join('');
+        box.innerHTML=legend+`<div class="cmp-timeline"><div class="lane"><span>SimC</span><div>${marks('sim')}</div></div><div class="lane"><span>You</span><div>${marks('log')}</div></div></div><p class="hint">Point at a mark for what happened. The scale is ${Math.round(end)} s.</p>`;
+      }else{
+        box.innerHTML=legend+`<table class="result-table cmp-table"><thead><tr><th>SimC</th><th>You</th><th>What happened</th></tr></thead><tbody>${r.rows.map(row=>`<tr class="cmp-row ${cls(row)}"><td>${row.sim?`<b>${row.sim.at.toFixed(1)}</b> ${esc(row.sim.name)}`:''}</td><td>${row.log?`<b>${row.log.at.toFixed(1)}</b> ${esc(row.log.name)}`:''}</td><td><span class="cmp-tag">${kinds[row.kind]}${row.size==='large'?' · large':row.size==='small'?' · small':''}</span> ${esc(row.note)}</td></tr>`).join('')}</tbody></table>`;
+      }
+    }catch(e){box.innerHTML=`<p class="notice">${esc(e.message)}</p>`;}
+  }
+  document.addEventListener('click',e=>{if(e.target.closest('[data-log-simulate]'))simulate();if(e.target.closest('[data-log-compare]'))compareEvents();});
+  document.addEventListener('change',e=>{if(e.target.id==='log-timeline'&&$('#log-compare-view .cmp-legend'))compareEvents();});
   $('#log-refresh').onclick=refresh;$('#log-scan').onclick=startScan;
   $('#log-character').onchange=()=>{store.set('simc-lab-log-character',$('#log-character').value);$('#log-other-label').hidden=$('#log-character').value!=='other';$('#log-report').innerHTML='';if(scan)renderFights();};
   $('#log-other').oninput=()=>{if(scan)renderFights();};$('#log-bosses').onchange=()=>{if(scan)renderFights();};
