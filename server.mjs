@@ -100,7 +100,7 @@ const server=http.createServer(async(req,res)=>{
       const slot=url.searchParams.get('slot'),info={class:url.searchParams.get('class'),spec:url.searchParams.get('spec'),level:url.searchParams.get('level')??90};if(!slotTypes[slot])return json(res,400,{error:'Select an equipment slot.'});
       const q=(url.searchParams.get('q')||'').toLowerCase();const result=catalog.currentItems.filter(i=>fitsSlot(i,slot,info)&&(i.name.toLowerCase().includes(q)||String(i.id)===q)).slice(0,100).map(i=>({id:i.id,name:i.name,itemLevel:i.itemLevel,expansion:i.expansion}));return json(res,200,result);
     }
-    if(req.method==='POST'&&route==='/api/armory'){if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const {region,realm,name,url:link}=await body(req);return json(res,200,await importArmory({region,realm,name,url:link},{executable:engine.executable}));}
+    if(req.method==='POST'&&route==='/api/armory'){if(updater.switching)throw new Error('SimC is switching to the new engine. Try again in a moment.');const {region,realm,name,url:link}=await body(req);return json(res,200,await importArmory({region,realm,name,url:link},{executable:engine.executable}));}
     if(req.method==='POST'&&route==='/api/import'){
       const text=(await body(req)).profile;const p=parseProfile(text);p.upgradeState=readUpgradeState(text);
       for(const item of Object.values(p.gear)){item.item=catalog.items.get(item.id)||null;item.enchants=catalog.forItem(item.id,p.info.class);}
@@ -125,7 +125,7 @@ const server=http.createServer(async(req,res)=>{
       const trinkets=plan.trinkets&&{specs:plan.trinkets.specs.length,trinkets:plan.trinkets.trinkets,candidates:plan.trinkets.candidates,skipped:plan.trinkets.skipped,tanks:plan.trinkets.specs.filter(s=>s.tank).length,sources:plan.trinkets.sources,levels:plan.trinkets.levels,steps:trinketSteps(plan.trinkets,plan.scenarios.length),model:plan.trinkets.model,estimate:plan.trinkets.estimate,screened:plan.trinkets.specs.filter(s=>new Set(s.candidates.map(c=>c.itemId)).size>plan.trinkets.finalists).length};
       return json(res,200,{trinkets,variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:trinkets?trinkets.steps:weapons?weapons.steps:crests||vault?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,vault,weapons});
     }
-    if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.state.status==='running')throw new Error('Wait for the SimC update to finish.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
+    if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.switching)throw new Error('SimC is switching to the new engine. Try again in a moment.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
     if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs());
     if(req.method==='GET'&&route==='/api/jobs')return json(res,200,[...jobs.jobs.values()].reverse().map(j=>({id:j.id,name:j.name,mode:j.mode,status:j.status,created:j.created,done:j.done,total:j.total,fraction:jobFraction(j)})));
     const jobRoute=route.match(/^\/api\/jobs\/([\da-f-]{36})(\/cancel)?$/);
@@ -182,6 +182,6 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}
 });
 server.listen(port,'127.0.0.1',()=>console.log(`SimC Lab: http://127.0.0.1:${port}`));
-// Keep SimC on the newest official build when the user wants it: checked once at every start.
-loadSettings().then(s=>s.autoUpdateSimc?updater.startup():null).catch(e=>console.error('Automatic SimC update failed:',e.message));
+// Look for a newer SimC build at start and every few hours. Nothing is installed without the user's click.
+updater.watch().catch(e=>console.error('SimC update check failed:',e.message));
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{jobs.child?.kill();server.close();process.exit(0);});
