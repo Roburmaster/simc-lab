@@ -10,6 +10,10 @@ import {tankUI,signed} from '/tank.js';
 import {engineUI} from '/engine.js';
 import {activityUI,describeProgress,duration} from '/activity.js';
 import {wowUI} from '/wow.js';
+// The Silvermoon dummies are always five, measured from a combat log beside them (lib/dummies.mjs).
+const dummyStyles={
+  SilvermoonDummies:'Five Cleave Training Dummies stacked together, 3,537,050 health each and level 90, as measured in Silvermoon. They cannot die and sit at about 1% health, so execute effects are up the whole fight. Every raid buff, target debuff, Bloodlust and consumable is turned off for this fight; turn on under Raid buffs & consumables what you had.'
+};
 import {armoryUI} from '/armory.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
@@ -54,7 +58,7 @@ function renderVariants(){$('#variants').innerHTML=variants.map((v,i)=>`<div cla
 $('#add-variant').addEventListener('click',()=>{variants.push({name:`Alternative ${variants.length+1}`,text:''});renderVariants();updateCount();});
 $('#variants').addEventListener('input',event=>{const el=event.target;if(el.dataset.field){variants[Number(el.closest('.variant').dataset.index)][el.dataset.field]=el.value;updateCount();}});
 $('#variants').addEventListener('click',event=>{if(event.target.dataset.remove!==undefined){variants.splice(Number(event.target.dataset.remove),1);renderVariants();updateCount();}});
-function request(){if(mode==='trinkets')return trinkets.request();const targets=Number($('#targets').value);const scenarioTargets=$('#matrix').checked?[...new Set([targets,3,5])]:[targets];return {profile:$('#profile').value,mode,enchants:selections,combine:$('input[name=combine]:checked').value==='true',talentSearch:features.settings(),upgrades:upgrades.settings(),crests:crests.settings(),vault:vault.settings(),weapons:weapons.settings(),trinkets:trinkets.settings(),tank:tank.settings(),environment:environment.settings(),variants,iterations:Number($('#iterations').value),targetError:Number($('#target-error').value),duration:Number($('#duration').value),threads:Number($('#threads').value),scenarios:scenarioTargets.map(n=>({style:$('#fight-style').value,targets:n}))};}
+function request(){if(mode==='trinkets')return trinkets.request();const targets=Number($('#targets').value);const scenarioTargets=dummyStyles[$('#fight-style').value]?[5]:$('#matrix').checked?[...new Set([targets,3,5])]:[targets];return {profile:$('#profile').value,mode,enchants:selections,combine:$('input[name=combine]:checked').value==='true',talentSearch:features.settings(),upgrades:upgrades.settings(),crests:crests.settings(),vault:vault.settings(),weapons:weapons.settings(),trinkets:trinkets.settings(),tank:tank.settings(),environment:environment.settings(),variants,iterations:Number($('#iterations').value),targetError:Number($('#target-error').value),duration:Number($('#duration').value),threads:Number($('#threads').value),scenarios:scenarioTargets.map(n=>({style:$('#fight-style').value,targets:n}))};}
 function updateCount(){
   syncGearSelection();
   const groups=Object.values(selections).filter(v=>v.length);const count=groups.reduce((n,v)=>n+v.length,0);$('#selection-count').textContent=`${count} selected`;
@@ -69,6 +73,14 @@ function updateCount(){
   if(mode==='weapons'){$('#run-summary').textContent='One tier list per specialization';$('#run-count').textContent='';weapons.count(request);}
   if(mode==='trinkets'){$('#run-summary').textContent='One trinket chart per specialization';$('#run-count').textContent='';trinkets.count(request);}
 }
+const styleNames={SilvermoonDummies:'Silvermoon dummies'};
+function syncFightStyle(){
+  const note=dummyStyles[$('#fight-style').value];
+  $('#targets').disabled=!!note;$('#matrix').disabled=!!note;if(note)$('#targets').value=5;
+  $('#fight-style-hint').hidden=!note;$('#fight-style-hint').textContent=note||'';
+}
+// Choosing the dummies starts from nothing; what the user turns on afterwards is kept.
+$('#fight-style').addEventListener('change',()=>{syncFightStyle();if(dummyStyles[$('#fight-style').value])environment.bare();});syncFightStyle();
 $$('.settings input,.settings select,input[name=combine]').forEach(el=>el.addEventListener('change',updateCount));
 async function runJob(){
   try{notice('');$('#run').disabled=true;if(!['weapons','trinkets'].includes(mode)&&(!profile||importedText!==$('#profile').value))await importProfile();const data=request();const preview=await api('/api/preview',data);$('#run-summary').textContent=`Starting ${preview.total} runs …`;const job=await api('/api/jobs',data);activity.refresh();await watchJob(job.id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){notice(e.message);}finally{$('#run').disabled=false;updateCount();}
@@ -89,7 +101,7 @@ function renderJob(job){
   for(let s=0;s<job.scenarios.length&&!['upgrades','crests','vault','weapons','trinkets'].includes(job.mode);s++){
     const rows=job.results.filter(r=>r.scenario===s);if(!rows.length)continue;
     const baseline=rows.find(r=>r.baseline&&r.status==='complete');const tanky=!!job.settings.tank;const rank=r=>tanky?(r.baseline?0:r.score??-Infinity):(r.dps||0);const ordered=[...rows].sort((a,b)=>rank(b)-rank(a));const max=Math.max(...ordered.map(r=>r.dps||0),1);const scenario=job.scenarios[s];
-    html+=`<section class="result-scenario"><h3>${esc(scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
+    html+=`<section class="result-scenario"><h3>${esc(styleNames[scenario.style]||scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
     if(rows.length===1&&job.total===1&&baseline)html+=`<div class="dps-hero"><strong>${number(baseline.dps)}</strong><span>DPS${baseline.error95!==null?` · ±${number(baseline.error95)} (95 %)` : ''}</span></div>`;
     html+=`<table class="result-table"><thead><tr><th>Variant</th><th>DPS / 95 %</th><th>vs baseline</th>${tanky?'<th>Survival</th><th>Score</th>':''}<th>Report</th></tr></thead><tbody>`;
     for(const [i,row] of ordered.entries()){

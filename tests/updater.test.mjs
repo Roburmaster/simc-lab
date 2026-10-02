@@ -63,20 +63,44 @@ test('an installed engine newer than the nightly is kept for the current WoW bui
   assert.equal(plan({...args,local:{...local,wowVersion:'12.1.0.69814'},live:live('12.1.0.69875')}).action,'nightly','a WoW patch replaces the engine');
 });
 
-test('at start, only an official build or new game data is installed by itself',async()=>{
+test('SimC is never installed by itself: the watch only checks, and says what newer build is out',async()=>{
   const {Updater}=await import('../lib/updater.mjs');
-  for(const [action,started] of [['nightly',true],['data',true],['source',false],['none',false],['wait',false]]){
-    const u=new Updater({busy:()=>false,onInstalled:async()=>{}});
-    let mode=null;
-    u.check=async()=>({checkedAt:'t',local:{behind:3},decision:{action,reason:`r-${action}`}});
-    u.start=m=>{mode=m;return {status:'running'};};
-    await u.startup();
-    assert.equal(mode!==null,started,action);
-    assert.equal(u.state.startup.reason,`r-${action}`);
+  const u=new Updater({busy:()=>false,onInstalled:async()=>{},checkEvery:5});
+  let checks=0,started=false;
+  u.check=async()=>{checks++;return {};};u.start=()=>{started=true;};u.run=async()=>{started=true;};
+  assert.equal(u.startup,undefined,'no install at start');
+  await u.watch();await new Promise(r=>setTimeout(r,30));clearInterval(u.timer);
+  assert.ok(checks>=2,'checked at start and again later');assert.equal(started,false);
+  for(const [action,offered] of [['nightly',true],['source',true],['data',true],['none',false],['wait',false]]){
+    u.noteAvailable({checkedAt:'t',behind:3,live:{wowBuild:'12.1.0.1',contentHash:'h9'},decision:{action,reason:`r-${action}`,engine:action==='nightly'||action==='source'?{sha:'abc1234',version:'1210-02',wowVersion:'12.1.0.1',date:'d'}:null}});
+    assert.equal(!!u.state.available,offered,action);assert.equal(u.state.lastCheck.reason,`r-${action}`);
   }
-  const busy=new Updater({busy:()=>true,onInstalled:async()=>{}});
-  busy.check=async()=>{throw new Error('must not check while simulations run');};
-  assert.equal(await busy.startup(),null);
+  u.noteAvailable({checkedAt:'t',behind:3,decision:{action:'nightly',reason:'r',engine:{sha:'abc1234',version:'1210-02'}}});
+  assert.deepEqual([u.state.available.key,u.state.available.version,u.state.available.behind],['nightly:abc1234','1210-02',3],'one key per build, so the page asks once');
+  u.noteAvailable({checkedAt:'t',live:{contentHash:'h9'},decision:{action:'data',reason:'r',engine:null}});
+  assert.equal(u.state.available.key,'data:h9');
+});
+
+test('simulations may start during an update, except while the engine is switched',async()=>{
+  const {Updater}=await import('../lib/updater.mjs');
+  const u=new Updater({busy:()=>true,onInstalled:async()=>{}});
+  u.run=()=>new Promise(()=>{});
+  u.state.available={key:'nightly:x'};
+  u.start('auto');
+  assert.equal(u.running,true,'an update starts while a simulation runs');
+  assert.equal(u.state.available.key,'nightly:x','the notice survives the start');
+  for(const [phase,switching] of [['check',false],['compile',false],['wait',false],['switch',true]]){u.phase(phase);assert.equal(u.switching,switching,phase);}
+  u.plan('source');assert.deepEqual(u.state.phases,['check','tools','fetch','configure','compile','verify','wait','switch']);
+});
+
+test('compile progress comes from MSBuild file names or make percentages',async()=>{
+  const {Updater}=await import('../lib/updater.mjs');
+  const u=new Updater({busy:()=>false,onInstalled:async()=>{}});
+  u.compiled={done:0,total:400};
+  u.compileProgress(['  sc_warrior.cpp','  sc_enemy.cpp','Generating Code...','simc.vcxproj -> C:\\build\\simc.exe']);
+  assert.deepEqual(u.state.progress,{label:'Compiling',done:2,total:400,unit:'files'});
+  u.compileProgress(['[ 45%] Building CXX object engine/CMakeFiles/engine.dir/sim/sim.cpp.o']);
+  assert.deepEqual(u.state.progress,{label:'Compiling',percent:45,unit:'percent'});
 });
 
 test('where there are no official builds (Linux), a newer commit on GitHub is built from source',()=>{
@@ -98,12 +122,6 @@ test('update modes: latest commit skips what is installed, a clean build does no
   assert.equal(await new Updater({busy:()=>false,onInstalled:async()=>{},followSource:async()=>true}).sourceOnly(),true);
   const plain=await new Updater({busy:()=>false,onInstalled:async()=>{}}).sourceOnly();
   assert.equal(plain,process.platform!=='win32');
-  // At start, following installs compile a newer commit; others never do.
-  for(const [sourceOnly,started] of [[true,true],[false,false]]){
-    const s=new Updater({busy:()=>false,onInstalled:async()=>{}});let mode=null;
-    s.check=async()=>({checkedAt:'t',sourceOnly,local:{behind:3},decision:{action:'source',reason:'r'}});s.start=m=>{mode=m;return {};};
-    await s.startup();assert.equal(mode!==null,started);
-  }
 });
 
 test('following the latest commit on Windows builds GitHub head even when a newer nightly exists',()=>{
