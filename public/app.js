@@ -12,7 +12,7 @@ import {activityUI,describeProgress,duration} from '/activity.js';
 import {wowUI} from '/wow.js';
 // The Silvermoon dummies are always five, measured from a combat log beside them (lib/dummies.mjs).
 const dummyStyles={
-  SilvermoonDummies:'Five Cleave Training Dummies stacked together, 3,537,050 health each and level 90, as measured in Silvermoon. They cannot die and sit at about 1% health, so execute effects are up the whole fight. Every raid buff, target debuff, Bloodlust and consumable is turned off for this fight; turn on under Raid buffs & consumables what you had.'
+  SilvermoonDummies:'Five Cleave Training Dummies stacked together, 3,537,050 health each and level 90, as measured in Silvermoon. They cannot die. Held: they sit at 1% the whole fight, as busy dummies in the city do, so execute is always up. From 100%: four short runs first measure how fast your damage takes each dummy down, then each one falls from 100% to 1% at that pace and stays there. Every raid buff, target debuff, Bloodlust and consumable starts off; turn on under Buffs what you had.'
 };
 import {armoryUI} from '/armory.js';
 const $=s=>document.querySelector(s);
@@ -58,7 +58,7 @@ function renderVariants(){$('#variants').innerHTML=variants.map((v,i)=>`<div cla
 $('#add-variant').addEventListener('click',()=>{variants.push({name:`Alternative ${variants.length+1}`,text:''});renderVariants();updateCount();});
 $('#variants').addEventListener('input',event=>{const el=event.target;if(el.dataset.field){variants[Number(el.closest('.variant').dataset.index)][el.dataset.field]=el.value;updateCount();}});
 $('#variants').addEventListener('click',event=>{if(event.target.dataset.remove!==undefined){variants.splice(Number(event.target.dataset.remove),1);renderVariants();updateCount();}});
-function request(){if(mode==='trinkets')return trinkets.request();const targets=Number($('#targets').value);const scenarioTargets=dummyStyles[$('#fight-style').value]?[5]:$('#matrix').checked?[...new Set([targets,3,5])]:[targets];return {profile:$('#profile').value,mode,enchants:selections,combine:$('input[name=combine]:checked').value==='true',talentSearch:features.settings(),upgrades:upgrades.settings(),crests:crests.settings(),vault:vault.settings(),weapons:weapons.settings(),trinkets:trinkets.settings(),tank:tank.settings(),environment:environment.settings(),variants,iterations:Number($('#iterations').value),targetError:Number($('#target-error').value),duration:Number($('#duration').value),threads:Number($('#threads').value),scenarios:scenarioTargets.map(n=>({style:$('#fight-style').value,targets:n}))};}
+function request(){if(mode==='trinkets')return trinkets.request();const targets=Number($('#targets').value);const scenarioTargets=dummyStyles[$('#fight-style').value]?[5]:$('#matrix').checked?[...new Set([targets,3,5])]:[targets];return {profile:$('#profile').value,mode,enchants:selections,combine:$('input[name=combine]:checked').value==='true',talentSearch:features.settings(),upgrades:upgrades.settings(),crests:crests.settings(),vault:vault.settings(),weapons:weapons.settings(),trinkets:trinkets.settings(),tank:tank.settings(),environment:environment.settings(),variants,iterations:Number($('#iterations').value),targetError:Number($('#target-error').value),duration:Number($('#duration').value),threads:Number($('#threads').value),scenarios:scenarioTargets.map(n=>({style:$('#fight-style').value,targets:n,...(dummyStyles[$('#fight-style').value]?{dummyHealth:{mode:$('#dummy-health').value}}:{})}))};}
 function updateCount(){
   syncGearSelection();
   const groups=Object.values(selections).filter(v=>v.length);const count=groups.reduce((n,v)=>n+v.length,0);$('#selection-count').textContent=`${count} selected`;
@@ -76,7 +76,7 @@ function updateCount(){
 const styleNames={SilvermoonDummies:'Silvermoon dummies'};
 function syncFightStyle(){
   const note=dummyStyles[$('#fight-style').value];
-  $('#targets').disabled=!!note;$('#matrix').disabled=!!note;if(note)$('#targets').value=5;
+  $('#targets').disabled=!!note;$('#matrix').disabled=!!note;if(note)$('#targets').value=5;$('#dummy-health-label').hidden=!note;
   $('#fight-style-hint').hidden=!note;$('#fight-style-hint').textContent=note||'';
 }
 // Choosing the dummies starts from nothing; what the user turns on afterwards is kept.
@@ -101,7 +101,7 @@ function renderJob(job){
   for(let s=0;s<job.scenarios.length&&!['upgrades','crests','vault','weapons','trinkets'].includes(job.mode);s++){
     const rows=job.results.filter(r=>r.scenario===s);if(!rows.length)continue;
     const baseline=rows.find(r=>r.baseline&&r.status==='complete');const tanky=!!job.settings.tank;const rank=r=>tanky?(r.baseline?0:r.score??-Infinity):(r.dps||0);const ordered=[...rows].sort((a,b)=>rank(b)-rank(a));const max=Math.max(...ordered.map(r=>r.dps||0),1);const scenario=job.scenarios[s];
-    html+=`<section class="result-scenario"><h3>${esc(styleNames[scenario.style]||scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
+    html+=`<section class="result-scenario"><h3>${esc(styleNames[scenario.style]||scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec${scenario.dummyHealth?.mode==='falling'?' / dummies from 100%':scenario.dummyHealth?' / dummies held at 1%':''}</span></h3>${scenario.dummyHealth?.reached?`<p class="hint">Your damage took the dummies to 1% after ${scenario.dummyHealth.reached.map(r=>r===null?'—':r.toFixed(0)+' s').join(', ')} (the first is your main target).</p>`:''}`;
     if(rows.length===1&&job.total===1&&baseline)html+=`<div class="dps-hero"><strong>${number(baseline.dps)}</strong><span>DPS${baseline.error95!==null?` · ±${number(baseline.error95)} (95 %)` : ''}</span></div>`;
     html+=`<table class="result-table"><thead><tr><th>Variant</th><th>DPS / 95 %</th><th>vs baseline</th>${tanky?'<th>Survival</th><th>Score</th>':''}<th>Report</th></tr></thead><tbody>`;
     for(const [i,row] of ordered.entries()){
