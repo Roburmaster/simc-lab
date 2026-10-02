@@ -11,17 +11,36 @@ const lanes=['Recklessness','Avatar','Bladestorm',"Odyn's Fury",'Thunderous Roar
 // Log Analysis: pick a combat log, a fight and a player, and see what the rotation did and what to change, beside a
 // finished simulation of the same character when one is chosen.
 export function logsUI({api,notice}){
-  let files=[],scan=null,polling=null;
+  let files=[],scan=null,polling=null,characters=[];
+  const store={get:k=>{try{return localStorage.getItem(k);}catch{return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch{}}};
   $('#history').insertAdjacentHTML('afterend',`<section id="logs-panel" class="panel logs-panel" hidden>
     <div class="panel-heading"><h2>Analyse a combat log</h2><span class="pill" id="logs-specs"></span></div>
     <p class="panel-intro">Turn on Advanced Combat Logging in WoW (System → Network) and type /combatlog before you fight. SimC Lab reads the log from your WoW folder, finds the fights, and shows what your rotation did and what to change.</p>
+    <div class="logs-pick"><label>Character<select id="log-character"></select></label><label id="log-other-label" hidden>Name in the log<input id="log-other" type="text" placeholder="Name-Realm" autocomplete="off"></label></div>
     <div class="logs-pick"><label>Combat log<select id="log-file"></select></label><button class="button small secondary" id="log-refresh">Refresh</button><button class="button small primary" id="log-scan">Find fights</button></div>
     <div id="log-scan-state" class="hint"></div>
-    <div class="logs-pick" id="log-filters" hidden><label>Player<input id="log-player" type="search" placeholder="Name, e.g. Roburevolved" autocomplete="off"></label><label class="check"><input type="checkbox" id="log-bosses">Boss encounters only</label></div>
+    <div class="logs-pick" id="log-filters" hidden><label class="check"><input type="checkbox" id="log-bosses">Boss encounters only</label></div>
     <div id="log-fights"></div>
     <div id="log-report"></div></section>`);
 
+  // The analysis is about one character: yours, as the SimCLab addon saved it (Name and realm), or a name typed in.
+  async function loadCharacters(){
+    try{characters=((await api('/api/wow/captures')).characters||[]).map(c=>({key:c.key,name:c.name,realm:c.realm})).filter(c=>c.name);}catch{characters=[];}
+    const saved=store.get('simc-lab-log-character');
+    $('#log-character').innerHTML=characters.map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.realm||'')}</option>`).join('')+'<option value="other">Another name …</option>';
+    if(saved&&[...$('#log-character').options].some(o=>o.value===saved))$('#log-character').value=saved;
+    $('#log-other-label').hidden=$('#log-character').value!=='other';
+  }
+  const flat=s=>String(s||'').toLowerCase().replace(/[\s'’-]/g,'');
+  // A log name is Name-Realm-Region; the addon saves the name and the realm.
+  function mine(logName){
+    const key=$('#log-character').value;
+    if(key==='other'){const typed=flat($('#log-other').value);return !!typed&&flat(logName).startsWith(typed);}
+    const c=characters.find(x=>x.key===key);if(!c)return false;
+    const [name,realm]=String(logName).split('-');return flat(name)===flat(c.name)&&(!c.realm||flat(realm)===flat(c.realm));
+  }
   async function refresh(){
+    await loadCharacters();
     try{
       const r=await api('/api/logs');files=r.files;$('#logs-specs').textContent=`Analysed: ${r.specs.join(', ')}`;
       $('#log-file').innerHTML=files.length?files.map(f=>`<option value="${esc(f.name)}">${esc(f.name)} · ${size(f.size)} · ${when(f.modified)}</option>`).join(''):'<option value="">No combat logs found</option>';
@@ -37,19 +56,17 @@ export function logsUI({api,notice}){
       scan={file,...state.scan};$('#log-scan-state').textContent=`${scan.fights.length} fights in ${file}.`;renderFights();
     }catch(e){$('#log-scan-state').textContent=e.message;}
   }
-  // A raid log has a stretch of activity for every player and pull, so the list is filtered and capped.
+  // Only the chosen character's fights: their own activity, and the boss encounters they took part in.
   function renderFights(){
     $('#log-filters').hidden=false;
-    const q=$('#log-player').value.trim().toLowerCase(),bosses=$('#log-bosses').checked;
-    const all=scan.fights.slice().reverse().filter(f=>(!bosses||f.kind==='encounter')&&(!q||(f.kind==='encounter'?f.players.some(p=>p.name.toLowerCase().includes(q)):String(f.name).toLowerCase().includes(q))));
+    const bosses=$('#log-bosses').checked;
+    const all=scan.fights.slice().reverse().map(f=>({f,me:f.kind==='encounter'?f.players.find(p=>mine(p.name)):mine(f.name)?{guid:f.player,name:f.name,damage:f.damage}:null})).filter(x=>x.me&&(!bosses||x.f.kind==='encounter'));
     const rows=all.slice(0,60);
-    $('#log-fights').innerHTML=rows.length?`<table class="result-table log-fights"><thead><tr><th>Fight</th><th>Length</th><th>Player</th><th>Damage</th><th></th></tr></thead><tbody>${rows.map(f=>{
-      const players=f.kind==='encounter'?(q?[...f.players].sort((a,b)=>Number(b.name.toLowerCase().includes(q))-Number(a.name.toLowerCase().includes(q))):f.players):[{guid:f.player,name:f.name,damage:f.damage}];
-      return `<tr><td>${f.kind==='encounter'?`<strong>${esc(f.name)}</strong><small>${f.success?'Kill':'Wipe'}</small>`:`Activity<small>${esc(f.targets.slice(0,3).join(', '))}${f.targets.length>3?' …':''}</small>`}</td><td>${clock(f.length)}</td><td><select data-fight-player="${f.id}">${players.map(p=>`<option value="${esc(p.guid)}">${esc(short(p.name))} · ${number(p.damage/Math.max(1,f.length))} DPS</option>`).join('')}</select></td><td>${number(players.reduce((n,p)=>n+p.damage,0))}</td><td><button class="button small secondary" data-analyse="${f.id}">Analyse</button></td></tr>`;}).join('')}</tbody></table>${all.length>rows.length?`<p class="hint">Showing the newest 60 of ${all.length}. Filter by player to narrow it.</p>`:''}`:'<p class="hint">No fights found. A fight is a boss encounter, or at least 20 seconds of continuous damage by one player.</p>';
+    $('#log-fights').innerHTML=rows.length?`<table class="result-table log-fights"><thead><tr><th>Fight</th><th>Length</th><th>DPS</th><th>Damage</th><th></th></tr></thead><tbody>${rows.map(({f,me})=>{
+      return `<tr data-player="${esc(me.guid)}" data-player-name="${esc(short(me.name))}"><td>${f.kind==='encounter'?`<strong>${esc(f.name)}</strong><small>${f.success?'Kill':'Wipe'}</small>`:`Activity<small>${esc(f.targets.slice(0,3).join(', '))}${f.targets.length>3?' …':''}</small>`}</td><td>${clock(f.length)}</td><td>${number(me.damage/Math.max(1,f.length))}</td><td>${number(me.damage)}</td><td><button class="button small secondary" data-analyse="${f.id}">Analyse</button></td></tr>`;}).join('')}</tbody></table>${all.length>rows.length?`<p class="hint">Showing the newest 60 of ${all.length}.</p>`:''}`:`<p class="hint">No fights for this character in the log. A fight is a boss encounter they took part in, or at least 20 seconds of their continuous damage.</p>`;
   }
   async function analyse(id){
-    const player=document.querySelector(`[data-fight-player="${id}"]`).value;
-    const name=short(document.querySelector(`[data-fight-player="${id}"]`).selectedOptions[0].textContent.split(' · ')[0]);
+    const row=document.querySelector(`[data-analyse="${id}"]`).closest('tr');const player=row.dataset.player,name=row.dataset.playerName;
     // Finished simulations of the same character, newest first, to set the rotation beside.
     let sims=[];try{sims=(await api('/api/jobs')).filter(j=>['complete','partial'].includes(j.status)&&['quick','compare','enchants','talents'].includes(j.mode)&&String(j.name).toLowerCase()===name.toLowerCase()).sort((a,b)=>String(b.created).localeCompare(String(a.created)));}catch{}
     $('#log-report').innerHTML=`<div class="log-compare"><label>Compare with a simulation<select id="log-compare"><option value="">No comparison</option>${sims.map(j=>`<option value="${esc(j.id)}">${esc(j.name)} · ${when(j.created)}</option>`).join('')}</select></label><p class="hint">${sims.length?'SimC’s casts per minute from that simulation are shown beside yours.':`No finished simulation of ${esc(name)} yet. Run a Quick Sim of the same character (for dummies, the Silvermoon dummies fight style) to compare.`}</p></div><div id="log-result">Analysing …</div>`;
@@ -69,7 +86,8 @@ export function logsUI({api,notice}){
       <p class="hint">Rage: ${number(r.rage.gained)} gained, ${number(r.rage.wasted)} lost to the cap. Buffs you already had when the log started (flask, food, rune) do not show in a log.</p>`;
   }
   $('#log-refresh').onclick=refresh;$('#log-scan').onclick=startScan;
-  $('#log-player').oninput=()=>{if(scan)renderFights();};$('#log-bosses').onchange=()=>{if(scan)renderFights();};
+  $('#log-character').onchange=()=>{store.set('simc-lab-log-character',$('#log-character').value);$('#log-other-label').hidden=$('#log-character').value!=='other';$('#log-report').innerHTML='';if(scan)renderFights();};
+  $('#log-other').oninput=()=>{if(scan)renderFights();};$('#log-bosses').onchange=()=>{if(scan)renderFights();};
   document.addEventListener('click',e=>{const b=e.target.closest('[data-analyse]');if(b)analyse(Number(b.dataset.analyse));});
   return {show:refresh};
 }
