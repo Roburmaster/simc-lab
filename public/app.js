@@ -86,7 +86,7 @@ function syncFightStyle(){
 }
 // Choosing the dummies starts from nothing; what the user turns on afterwards is kept.
 $('#bleed-tail-on').addEventListener('change',()=>{$('#bleed-tail-hint').hidden=!$('#bleed-tail-on').checked;});
-$('#fight-style').addEventListener('change',()=>{syncFightStyle();if(dummyStyles[$('#fight-style').value])environment.bare();});syncFightStyle();
+$('#fight-style').addEventListener('change',()=>{syncFightStyle();tank.forRoute($('#fight-style').value===routeStyle);if(dummyStyles[$('#fight-style').value])environment.bare();});syncFightStyle();
 $$('.settings input,.settings select,input[name=combine]').forEach(el=>el.addEventListener('change',updateCount));
 async function runJob(){
   try{notice('');$('#run').disabled=true;if(!['weapons','trinkets'].includes(mode)&&(!profile||importedText!==$('#profile').value))await importProfile();const data=request();const preview=await api('/api/preview',data);$('#run-summary').textContent=`Starting ${preview.total} runs …`;const job=await api('/api/jobs',data);activity.refresh();await watchJob(job.id);$('#results').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){notice(e.message);}finally{$('#run').disabled=false;updateCount();}
