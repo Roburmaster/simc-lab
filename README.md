@@ -153,6 +153,24 @@ A specialization with more trinkets than the final round size (16, 32 or 64; 64 
 
 **The tier list page.** A finished job offers one page in the design of mythicpersona.com's weapon tier list, with its fonts inside the file: every class and specialization, each trinket in its tier with its split bar, source, item level and Wowhead tooltip, and the gain at every level in the row's data so the website can import it. When the job ran 1, 3 and 5 targets, tabs at the top switch between them, with no script. Two trinkets together are not the sum of their bars; the page says so.
 
+## Mythic+ route (experimental, made by AI)
+
+> **Experimental and made by AI.** This fight style was written by an AI assistant (Claude) and has not yet been checked against Mythic+ combat logs. Use it to compare choices on the same route; do not read its DPS or run time as what a real run will give.
+
+The fight style **Mythic+ route** simulates a whole dungeon of the current season, pull by pull, with SimulationCraft's DungeonRoute. Everything it needs is read from addons on your PC at run time; nothing is shipped with the app:
+
+- **Mythic Dungeon Tools**: every enemy's health, enemy forces and bosses, and the routes you have saved. Health at a keystone level uses MDT's own formula (checked against a +14 combat log to within 0.1%).
+- **Raider.IO**: the replays of your own recent runs — when every mob died and when every boss was pulled and killed.
+
+Choose a dungeon, a keystone level and a route (one of your runs, or an MDT route), then the group's pace:
+
+- **As fast as one of your runs.** SimC simulates only you, so each mob gets your share of its health. Every boss you killed gets the share that makes it last as long as it did in that run; the trash gets the share that fills the rest of the run's time after walking to every pull. Two short measuring runs come first, the second with Bloodlust where the first placed it.
+- **A share of the group's damage** that you set.
+
+Bloodlust goes on the first pull and again on the first pull after it is ready. **Every season dungeon** runs all of them at once, each on your latest run. The result shows the simulated run time beside yours, your share of the group's damage on bosses and on trash, and every pull with its health, length and your DPS. Gear Compare, Enchant Lab, Talent Search and Upgrade Finder all work on a route; each row also shows the run time.
+
+Known limits: boss mechanics, movement, deaths and crowd control are not simulated, so the simulated player is better than a real one and the measured share comes out high. Time saved assumes the whole group speeds up with you, so it overstates what one player's gain is worth. Raider.IO adds up mobs that die together and leaves out mobs worth no forces; some replays keep too few kills to rebuild a route (they still set the pace), and an incomplete replay can pace a route badly. Tank simulation, Weapon Lab and Trinket Lab do not use this fight style.
+
 ## Tank simulation
 
 Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, Great Vault and Talent Search) then ranks results on DPS and survival.
