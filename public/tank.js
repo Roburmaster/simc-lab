@@ -4,11 +4,11 @@ const fields=[['pressure','Sustained damage (% health / sec)',0.5,20,0.5],['bust
 export const signed=(n,digits=2)=>`${n>=0?'+':''}${n.toFixed(digits)}`;
 
 export function tankUI({updateCount}){
-  let presets=null,active=false,weapons=false;
+  let presets=null,active=false,weapons=false,route=false;
   $('#results').insertAdjacentHTML('beforebegin',`<section class="panel" id="tank-panel" hidden><div class="panel-heading"><h2>Tank survival</h2><span class="pill" id="tank-scope">Tank specialization</span></div><p class="panel-intro" id="tank-intro">Tanks are ranked on DPS and survival. A boss is calibrated to your imported gear once per job, then every build fights the same boss.</p><div id="tank-content"></div></section>`);
   // The same settings serve one imported tank and every tank specialization in a Weapon Lab job.
   function scope(){
-    $('#tank-panel').hidden=!(active||weapons);
+    $('#tank-panel').hidden=route||!(active||weapons);
     $('#tank-scope').textContent=weapons?'Every tank specialization':'Tank specialization';
     $('#tank-intro').textContent=weapons?'Tank specializations are ranked on DPS and survival. A boss is calibrated once for each of their reference profiles, then every weapon fights that boss.':'Tanks are ranked on DPS and survival. A boss is calibrated to your imported gear once per job, then every build fights the same boss.';
   }
@@ -27,8 +27,10 @@ export function tankUI({updateCount}){
     init(options){presets=options.tankPresets;render();},
     show(profile){active=!!profile?.isTank;scope();},
     forWeapons(on){weapons=!!on;scope();},
+    // A Mythic+ route has no boss to survive, so a tank is ranked on DPS alone there.
+    forRoute(on){route=!!on;scope();},
     settings(){
-      if(!(active||weapons)||!presets)return undefined;
+      if(route||!(active||weapons)||!presets)return undefined;
       const result={preset:$('#tank-preset').value,weight:Number($('#tank-weight').value)};
       for(const [key] of fields){const value=$(`[data-tank="${key}"]`).value;if(value!=='')result[key]=Number(value);}
       return result;
