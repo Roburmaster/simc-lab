@@ -41,7 +41,7 @@ const season={
     {item:{id:20,name:'Ring',itemClass:4,itemSubClass:0,inventoryType:11,socketInfo:{sockets:[{}]}},source:{kind:'raid',group:-97,groupName:'Trash Drop',sequence:1}},
     {item:{id:21,name:'Old helm',itemClass:4,itemSubClass:4,inventoryType:1,expansion:7},source:{kind:'mplus',group:700,groupName:'Old dungeon'}},
     {item:{id:23,name:'Cursed band',itemClass:4,itemSubClass:0,inventoryType:11,bonusLists:[13708,13668]},source:{kind:'raid',group:500,groupName:'Boss',sequence:2}},
-    {item:{id:22,name:'Crafted helm',itemClass:4,itemSubClass:4,inventoryType:1},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}}
+    {item:{id:22,name:'Crafted helm',stats:[{id:24,alloc:1},{id:25,alloc:1}],itemClass:4,itemSubClass:4,inventoryType:1},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}}
   ]
 };
 const profile={info:{class:'warrior',spec:'arms',level:90},gear:{head:gear('head',30,',enchant_id=9'),finger1:gear('finger1',31,',enchant_id=4,gem_id=7/8'),finger2:gear('finger2',32)}};
@@ -128,8 +128,8 @@ const embSeason=()=>{
   const limits={bonuses:new Map([[8960,512]]),items:new Map([[41,512]]),quantities:new Map([[512,2]])};
   const craft={optionalCraftingSlots:[{id:391}]};
   return {...season,itemLimits:limits,embellishments:[{id:2,name:'Lining',bonusIds:[8960,12384],category:512,slots:[391]}],entries:[
-    {item:{id:40,name:'Crafted bracers',itemClass:4,itemSubClass:4,inventoryType:9,profession:craft},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}},
-    {item:{id:42,name:'Crafted boots',itemClass:4,itemSubClass:4,inventoryType:8,profession:craft},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}},
+    {item:{id:40,name:'Crafted bracers',stats:[{id:24,alloc:1},{id:25,alloc:1}],itemClass:4,itemSubClass:4,inventoryType:9,profession:craft},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}},
+    {item:{id:42,name:'Crafted boots',stats:[{id:24,alloc:1},{id:25,alloc:1}],itemClass:4,itemSubClass:4,inventoryType:8,profession:craft},source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}},
     {item:{id:41,name:'Born band',itemClass:4,itemSubClass:0,inventoryType:11},source:{kind:'crafted',group:-37,groupName:'Jewelcrafting'}}]};
 };
 for(const id of [40,41,42,50,51])items.set(id,{inventoryType:1,itemClass:4,name:'Item '+id});
@@ -170,4 +170,37 @@ test('embellishment pairs are the best embellished upgrades that can be worn tog
   const text=lines(pairs.slice(0,1),one,catalog);
   assert.equal(text.length,2);assert.match(text[0],/^profileset\."p001"=/);assert.match(text[1],/^profileset\."p001"\+=/);
   assert.deepEqual(embellishmentPairs(candidates,rows.map(r=>({...r,dps:900})),{dps:1000},one,data,catalog),[],'nothing that lost is paired');
+});
+
+test('crafted gear is tried in every legal stat pair unless one is chosen, and fixed stats take no pair',()=>{
+  const pairs=[{bonusId:8790,name:'Critical Strike / Haste'},{bonusId:8791,name:'Critical Strike / Mastery'},{bonusId:8792,name:'Haste / Versatility'}];
+  const fixed={id:23,name:'Crafted sash',itemClass:4,itemSubClass:4,inventoryType:6,stats:[{id:7,alloc:1},{id:32,alloc:1},{id:36,alloc:1}]};
+  const data={...season,craftedStats:pairs,entries:[...season.entries.filter(e=>e.source.kind==='crafted'),{item:fixed,source:{kind:'crafted',group:-33,groupName:'Blacksmithing'}}]};
+  for(const id of [23])items.set(id,{inventoryType:6,itemClass:4});
+  const helm=r=>r.candidates.filter(c=>c.itemId===22);
+  // No choice, or "all", is every pair: one candidate per pair, each named by its stats.
+  for(const stats of [undefined,'all']){
+    const found=helm(buildCandidates(profile,{crafted:{enabled:true,itemLevel:318,stats}},data,catalog,71));
+    assert.deepEqual(found.map(c=>c.craftedStat),pairs.map(p=>p.name));
+    assert.deepEqual(found.map(c=>c.line),pairs.map(p=>`head=,id=22,bonus_id=${p.bonusId},ilevel=318,enchant_id=9`));
+    assert.ok(found.every((c,i)=>c.sources[0].label===`Crafted · Blacksmithing · ${pairs[i].name} · 318`));
+  }
+  // One pair, or a list of them, narrows it; an unknown one is refused.
+  assert.equal(helm(buildCandidates(profile,{crafted:{enabled:true,itemLevel:318,stats:8792}},data,catalog,71)).length,1);
+  assert.equal(helm(buildCandidates(profile,{crafted:{enabled:true,itemLevel:318,stats:[8790,8792]}},data,catalog,71)).length,2);
+  assert.throws(()=>buildCandidates(profile,{crafted:{enabled:true,itemLevel:318,stats:[8790,1]}},data,catalog,71),/secondary stats/);
+  // A piece with fixed stats is one candidate with no pair bonus: it has no stats to choose.
+  const sash=buildCandidates(profile,{crafted:{enabled:true,itemLevel:318}},data,catalog,71).candidates.filter(c=>c.itemId===23);
+  assert.deepEqual(sash.map(c=>c.line),['waist=,id=23,ilevel=318']);
+  assert.equal(sash[0].craftedStat,undefined);
+});
+
+test('the pairs of one crafted piece are one item in the final round and the lists',()=>{
+  const c=(key,stat,slot='head')=>({key,slot,itemId:22,value:`,id=22,bonus_id=${stat}`,line:`${slot}=,id=22,bonus_id=${stat}`,craftedStat:'pair '+stat});
+  const other={key:'o1',slot:'head',itemId:30,value:',id=30',line:'head=,id=30'};
+  const list=[c('a',1),c('b',2),c('c',3),other];
+  const rows=['a','b','c','o1'].map((key,i)=>({key,dps:210000-i*100,error95:50}));
+  // Size 1 is one item, and every pair of it that could win goes with it; the other item stays out.
+  assert.deepEqual(selectFinalists(list,{rows,baseline:{dps:200000,error95:50}},1).map(x=>x.key),['a','b','c']);
+  assert.deepEqual(selectFinalists(list,{rows,baseline:{dps:200000,error95:50}},2).map(x=>x.key),['a','b','c','o1']);
 });

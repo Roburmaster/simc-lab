@@ -29,7 +29,7 @@ export function upgradeUI({api,notice,updateCount}){
       <section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="mplus" checked><strong>Mythic+</strong></label><p class="hint">${data.dungeons.length} dungeons in the current rotation, including reissued older dungeons.</p>${trackPicker('mplus',hero,1)}<details><summary>Dungeons</summary><div class="upgrade-group-actions"><button class="text-button" data-all="mplus">All</button><button class="text-button" data-none="mplus">None</button></div>${groupChecks('mplus',data.dungeons)}</details></section>
       <section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="vault"><strong>Great Vault</strong></label><p class="hint">Any boss or dungeon item from the full season loot tables, one track per vault row.</p>${[['raid','Raid row'],['mplus','Dungeon row'],['delves','World row']].filter(([row])=>row!=='delves'||data.delves).map(([row,label])=>`<div class="vault-row"><label class="check"><input type="checkbox" data-vault-row="${row}" checked>${label}</label>${trackPicker('vault-'+row,myth,1)}</div>`).join('')}</section>
       ${data.delves?`<section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="delves"><strong>Delves</strong></label><p class="hint">${esc(data.delves.name)} loot table.</p>${trackPicker('delves',hero,1)}</section>`:''}
-      ${data.crafted?`<section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="crafted"><strong>Crafted</strong></label><p class="hint">Epic profession gear. Some pieces require the matching profession to equip.</p><div class="two-col"><label>Item level<input id="crafted-ilevel" type="number" min="1" max="1000" value="${heroTop}"></label><label>Secondary stats<select id="crafted-stats">${data.craftedStats.map(s=>`<option value="${s.bonusId}">${esc(s.name)}</option>`).join('')}</select></label></div>${embellishmentPicker()}</section>`:''}
+      ${data.crafted?`<section class="upgrade-card"><label class="check upgrade-toggle"><input type="checkbox" data-source="crafted"><strong>Crafted</strong></label><p class="hint">Epic profession gear. Some pieces require the matching profession to equip. Pieces with open secondary stats are tried in every legal pair unless you pick one.</p><div class="two-col"><label>Item level<input id="crafted-ilevel" type="number" min="1" max="1000" value="${heroTop}"></label><label>Secondary stats<select id="crafted-stats"><option value="all">All combinations</option>${data.craftedStats.map(s=>`<option value="${s.bonusId}">${esc(s.name)}</option>`).join('')}</select></label></div>${embellishmentPicker()}</section>`:''}
     </div>
     <details class="log-details upgrade-slots"><summary>Slots to search</summary><div class="upgrade-group-actions"><button class="text-button" data-all="slot">All</button><button class="text-button" data-none="slot">None</button></div><div class="upgrade-groups">${gearGroups.flatMap(([,slots])=>slots).map(s=>`<label class="check"><input type="checkbox" data-group="slot" value="${s}" checked>${esc(slotNames[s])}</label>`).join('')}</div></details>
     <div class="two-col upgrade-options"><label>Final round size<select id="upgrade-finalists">${data.limits.finalists.map(n=>`<option value="${n}" ${n===48?'selected':''}>${n} candidates</option>`).join('')}</select></label><div id="upgrade-count" class="hint">Import a character to count candidates.</div></div>
@@ -45,7 +45,7 @@ export function upgradeUI({api,notice,updateCount}){
     result.mplus={enabled:on('mplus'),...pick('mplus'),dungeons:checked('mplus')};
     result.vault={enabled:on('vault')};for(const row of ['raid','mplus','delves'])if($(`[data-vault-row="${row}"]`))result.vault[row]={enabled:$(`[data-vault-row="${row}"]`).checked,...pick('vault-'+row)};
     if(data.delves)result.delves={enabled:on('delves'),...pick('delves')};
-    if(data.crafted)result.crafted={enabled:on('crafted'),itemLevel:Number($('#crafted-ilevel').value),stats:Number($('#crafted-stats').value),...(data.embellishments?.length?{embellishments:checked('emb')}:{})};
+    if(data.crafted)result.crafted={enabled:on('crafted'),itemLevel:Number($('#crafted-ilevel').value),stats:$('#crafted-stats').value==='all'?'all':Number($('#crafted-stats').value),...(data.embellishments?.length?{embellishments:checked('emb')}:{})};
     return result;
   }
   function changed(event){
@@ -69,6 +69,8 @@ export function upgradeUI({api,notice,updateCount}){
   }
   // Rings and trinkets are simulated in both of their slots; the filter treats each pair as one slot.
   const family=slot=>String(slot||'').replace(/[12]$/,'');
+  // The same identity as the server's: one crafted piece in several stat pairs is a single item, and the list keeps its best pair.
+  const variantOf=c=>c.craftedStat?`${c.itemId}|${c.embellishment||''}`:c.value;
   const familyNames={head:'Head',neck:'Neck',shoulder:'Shoulders',back:'Back',chest:'Chest',wrist:'Wrists',hands:'Hands',waist:'Waist',legs:'Legs',feet:'Feet',finger:'Rings',trinket:'Trinkets',main_hand:'Main hand',off_hand:'Off hand'};
   // Picking a slot keeps every measured item for it, upgrades and the rest, in every list below.
   function slotFilterBar(rows){
@@ -96,7 +98,7 @@ export function upgradeUI({api,notice,updateCount}){
         const percent=100*delta/Math.max(1,base.dps),tanky=Number.isFinite(row.score);
         const entry={...row,c,delta,percent,rank:tanky?row.score:percent,tanky,uncertain:tanky?Math.abs(row.score)<=(row.scoreError||0):error!==null&&Math.abs(delta)<=error};
         // Rings and trinkets are tried in both slots: keep one placement per item, preferring the final round.
-        const id=c.slot.replace(/[12]$/,'')+'|'+c.value;const previous=best.get(id);
+        const id=family(c.slot)+'|'+variantOf(c);const previous=best.get(id);
         if(!previous||row.stage>previous.stage||row.stage===previous.stage&&entry.rank>previous.rank)best.set(id,entry);
       }
       const measured=[...best.values()].sort((a,b)=>b.stage-a.stage||b.rank-a.rank);
@@ -120,6 +122,17 @@ export function upgradeUI({api,notice,updateCount}){
       // "why is this item not here?".
       const losers=rows.filter(r=>r.stage===2&&r.rank<=0);
       if(slotFilter!=='all'&&losers.length)html+=`<h4 class="upgrade-heading">Measured, but no better than your gear</h4>${table(losers.sort((a,b)=>b.rank-a.rank))}`;
+      // In the overview, a slot where nothing won still shows the best item measured for it, final round over
+      // screening: a slot that was tried and lost must not look like one that was never searched.
+      if(slotFilter==='all'){
+        const won=new Set(upgrades.map(r=>family(r.c.slot)));
+        const bestLost=Object.keys(familyNames).filter(f=>!won.has(f)).map(f=>{
+          const tried=measured.filter(r=>family(r.c.slot)===f);if(!tried.length)return null;
+          const stage=Math.max(...tried.map(r=>r.stage));
+          return tried.filter(r=>r.stage===stage).sort((a,b)=>b.rank-a.rank)[0];
+        }).filter(Boolean);
+        if(bestLost.length)html+=`<h4 class="upgrade-heading">Tested, but no better than your gear</h4><p class="hint">The best item measured for each slot without an upgrade. Pick a slot above to see everything measured for it.</p>${table(bestLost)}`;
+      }
       if(slotFilter==='all')html+=pairsSection(job,s,candidates,baselines[3]);
       const screened=rows.filter(r=>r.stage===1);
       if(screened.length)html+=`<details class="log-details"${slotFilter==='all'?'':' open'}><summary>Screening results not simulated again (${screened.length})</summary>${table(screened.sort((a,b)=>b.rank-a.rank))}</details>`;
