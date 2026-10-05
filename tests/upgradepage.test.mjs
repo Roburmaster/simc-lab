@@ -49,3 +49,22 @@ test('upgrade report: character, slots, sources and every upgrade, escaped and s
   assert.equal((html.match(/<script/g)||[]).length,1);assert.match(html,/<script async src="https:\/\/wow\.zamimg\.com\/js\/tooltips\.js"><\/script>/);
   assert.throws(()=>upgradeReportPage({...job,upgrade:undefined}),/not an Upgrade Finder run/);
 });
+
+test('a slot that was tried and lost shows the best item measured for it, the final round over screening',()=>{
+  const html=upgradeReportPage(job,{info:{name:'Roburevolved',class:'warrior',spec:'fury'},equipped:{feet:{id:8,name:'Old boots',value:',id=8'},legs:{id:7,name:'Old legs',value:',id=7'},head:{id:9,name:'Old hat',value:',id=9'}}});
+  const card=name=>html.split("<article").find(a=>a.includes(`<header><span>${name}</span>`));
+  // The boots lost in the final round: named, with how much, and no longer read as never searched.
+  assert.match(card('Feet'),/Nothing measured beat it\.[\s\S]*Best tested[\s\S]*Boots[\s\S]*-0\.05 %/);
+  // The legs only got through screening, and the card says so.
+  assert.match(card('Legs'),/Best tested[\s\S]*Screened legs[\s\S]*screening only/);
+  // A slot that has a winner keeps its winner and adds no second line.
+  assert.doesNotMatch(card('Head'),/Best tested/);
+});
+
+test('the stat pairs of one crafted piece show once, in the pair that did best',()=>{
+  const pair=(key,stat)=>candidate(key,'feet',3000,'Crafted boots',[src('crafted','crafted:1','Blacksmithing')],{craftedStat:stat,value:`,id=3000,bonus_id=${key}`});
+  const crafted={...job,upgrade:{...job.upgrade,candidates:[pair('p1','Critical Strike / Haste'),pair('p2','Haste / Versatility'),pair('p3','Mastery / Versatility')]},
+    results:[{scenario:0,stage:2,key:'p1',status:'complete',dps:201000,error95:200},{scenario:0,stage:2,key:'p2',status:'complete',dps:203000,error95:200},{scenario:0,stage:2,key:'p3',status:'complete',dps:202000,error95:200}]};
+  const {rows,upgrades}=measured(crafted,0);
+  assert.equal(rows.length,1);assert.deepEqual(upgrades.map(r=>r.key),['p2']);
+});
