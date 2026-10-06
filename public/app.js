@@ -77,12 +77,17 @@ function updateCount(){
 }
 const mplus=mplusUI({api,notice,onChange:()=>updateCount()});
 const styleNames={SilvermoonDummies:'Silvermoon dummies'};
+// SimC's Dungeon Slice is one boss for six minutes whatever it is told, so those two fields are locked and show it.
+const sliceNote='Dungeon Slice is a 6 minute slice of an M+ dungeon with one boss. SimC sets the duration and the target count itself, so those fields are locked.';
+let beforeSlice=null;
 function syncFightStyle(){
-  const note=dummyStyles[$('#fight-style').value],route=$('#fight-style').value===routeStyle;
-  $('#targets').disabled=!!note||route;$('#matrix').disabled=!!note||route;if(note)$('#targets').value=5;$('#dummy-health-label').hidden=!note;
+  const note=dummyStyles[$('#fight-style').value],route=$('#fight-style').value===routeStyle,slice=$('#fight-style').value==='DungeonSlice';
+  if(slice&&!beforeSlice){beforeSlice={targets:$('#targets').value,duration:$('#duration').value};$('#targets').value=1;$('#duration').value=360;}
+  else if(!slice&&beforeSlice){$('#targets').value=beforeSlice.targets;$('#duration').value=beforeSlice.duration;beforeSlice=null;}
+  $('#targets').disabled=!!note||route||slice;$('#matrix').disabled=!!note||route||slice;if(note)$('#targets').value=5;$('#dummy-health-label').hidden=!note;
   // A Mythic+ route is as long as its pulls take, and its targets are the pulls' mobs.
-  $('#duration').disabled=route;$('#bleed-tail-on').disabled=route;mplus.show(route);
-  $('#fight-style-hint').hidden=!note;$('#fight-style-hint').textContent=note||'';
+  $('#duration').disabled=route||slice;$('#bleed-tail-on').disabled=route||slice;mplus.show(route);
+  $('#fight-style-hint').hidden=!(note||slice);$('#fight-style-hint').textContent=note||(slice?sliceNote:'');
 }
 // Choosing the dummies starts from nothing; what the user turns on afterwards is kept.
 $('#bleed-tail-on').addEventListener('change',()=>{$('#bleed-tail-hint').hidden=!$('#bleed-tail-on').checked;});
