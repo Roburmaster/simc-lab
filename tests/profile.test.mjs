@@ -49,6 +49,10 @@ test('version and job bounds prevent wrong-build simulations',async()=>{
   await assert.rejects(prepare({profile:example,scenarios:[{style:'Invalid',targets:1}]},catalog),/fight style/);
   await assert.rejects(prepare({profile:example,scenarios:[{style:'Patchwerk',targets:1},{style:'Patchwerk',targets:1}]},catalog),/more than once/);
 });
+test('Dungeon Slice is always one boss for six minutes, so a matrix of targets is one fight',async()=>{
+  const plan=await prepare({profile:example,duration:120,scenarios:[{style:'DungeonSlice',targets:4,bleedTail:15},{style:'DungeonSlice',targets:3},{style:'DungeonSlice',targets:5}]},catalog);
+  assert.equal(plan.scenarios.length,1);assert.deepEqual([plan.scenarios[0].targets,plan.scenarios[0].duration,plan.scenarios[0].bleedTail],[1,360,undefined]);
+});
 test('uncertainty is standard error of the mean, not iteration spread',()=>{
   const result=resultFrom({sim:{players:[{collected_data:{dps:{mean:1000,mean_std_dev:10,std_dev:500}}}],options:{iterations:100}}});
   assert.ok(Math.abs(result.error95-19.59964)<.0001);assert.throws(()=>resultFrom({sim:{players:[]}}));
