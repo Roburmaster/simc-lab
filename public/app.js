@@ -83,10 +83,14 @@ let beforeSlice=null;
 // Nothing in Dungeon Slice attacks the tank, so a tank specialization has no survival to measure there: the choice is off
 // for an imported tank (the labs run their own fights and are left alone).
 function syncTankStyles(){
-  const option=[...$('#fight-style').options].find(o=>o.value==='DungeonSlice');if(!option)return;
   const off=!!profile?.isTank&&!['weapons','trinkets'].includes(mode);
-  option.disabled=off;option.title=off?'Not available for tank specializations: nothing in this fight attacks the tank.':'';
-  if(off&&$('#fight-style').value==='DungeonSlice'){$('#fight-style').value='Patchwerk';syncFightStyle();}
+  // SimC's own adds never attack, so a tank is simulated on the fights where every extra target is a mob that hits it.
+  const why={DungeonSlice:'Not available for tank specializations: nothing in this fight attacks the tank. Use Patchwerk with more targets: each extra target is a mob that attacks you.',HecticAddCleave:'Not available for tank specializations: SimC’s adds in this fight never attack. Use Patchwerk with more targets: each extra target is a mob that attacks you.'};
+  for(const [style,reason] of Object.entries(why)){
+    const option=[...$('#fight-style').options].find(o=>o.value===style);if(!option)continue;
+    option.disabled=off;option.title=off?reason:'';
+    if(off&&$('#fight-style').value===style){$('#fight-style').value='Patchwerk';syncFightStyle();}
+  }
 }
 function syncFightStyle(){
   const note=dummyStyles[$('#fight-style').value],route=$('#fight-style').value===routeStyle,slice=$('#fight-style').value==='DungeonSlice';
