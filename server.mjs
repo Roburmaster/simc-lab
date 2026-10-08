@@ -16,8 +16,6 @@ import {trinketListPage} from './lib/trinketpage.mjs';
 import {siteReport} from './lib/sitereport.mjs';
 import {limits as trinketLimits,trinketSteps,levelSteps,scenarioPresets} from './lib/trinkets.mjs';
 import {upgradeReportPage} from './lib/upgradepage.mjs';
-import {bisReportPage} from './lib/bispage.mjs';
-import {depths as bisDepths,bisSteps} from './lib/bis.mjs';
 import {healerWeights,contents as healerContents} from './lib/healers.mjs';
 import {root,runsDir,engineStatus,prepare,Jobs,loadEnginePaths,jobFraction} from './lib/engine.mjs';
 import * as engine from './lib/engine.mjs';
@@ -156,7 +154,6 @@ const server=http.createServer(async(req,res)=>{
     if(route!=='/api/jobs'&&route.startsWith('/api/')&&!route.startsWith('/api/jobs/')&&route!=='/api/status')ready();
     if(req.method==='GET'&&route==='/api/options')return json(res,200,{buffs,consumables:catalog.consumables,expansion:catalog.expansion,tankPresets});
     if(req.method==='GET'&&route==='/api/upgrade-sources')return json(res,200,publicSources(season));
-    if(req.method==='GET'&&route==='/api/bis-sources')return json(res,200,{...publicSources(season),craftedCap:await craftedItemLevel(engine.source),depths:bisDepths});
     if(req.method==='GET'&&route==='/api/weapon-specs'){
       const specs=await loadReferenceSpecs(engine.source,talentData);
       return json(res,200,{specs:specs.map(publicSpec),tracks:season.tracks,difficulties:season.difficulties,kinds:weaponKindNames,craftedStats:season.craftedStats,craftedCap:await craftedItemLevel(engine.source),limits:weaponLimits,season:season.season,healer:{contents:healerContents,source:(await healerWeights()).source}});
@@ -190,12 +187,11 @@ const server=http.createServer(async(req,res)=>{
     }
     if(req.method==='POST'&&route==='/api/preview'){
       const plan=await prepare(await body(req),catalog,talentData,season);const upgrade=plan.upgrade&&{candidates:plan.upgrade.candidates.length,slots:new Set(plan.upgrade.candidates.map(c=>c.slot)).size,finalists:plan.upgrade.finalists,embellished:plan.upgrade.candidates.filter(c=>c.embellishment).length,blocked:plan.upgrade.blocked,freed:plan.upgrade.freed,limitsUsed:plan.upgrade.limitsUsed,steps:upgradeSteps(plan.upgrade,plan.scenarios.length)};
-      const bis=plan.bis&&{candidates:plan.bis.candidates.length,bags:plan.bis.bags,slots:new Set(plan.bis.candidates.map(c=>c.slot)).size,rounds:plan.bis.rounds,finalists:plan.bis.finalists,embellished:plan.bis.candidates.filter(c=>c.embellishment).length,steps:bisSteps(plan.bis,plan.scenarios.length)};
       const crests=plan.crests&&{affordable:plan.crests.affordable,candidates:plan.crests.candidates.length,items:plan.crests.items,budget:plan.crests.budget,state:plan.crests.state};
       const vault=plan.vault&&{candidates:plan.vault.candidates.length,items:plan.vault.items,skipped:plan.vault.skipped,upgraded:plan.vault.upgraded};
       const weapons=plan.weapons&&{specs:plan.weapons.specs.length,candidates:plan.weapons.candidates,skipped:plan.weapons.skipped,tanks:plan.weapons.specs.filter(s=>s.tank).length,healers:plan.weapons.specs.filter(s=>s.healer).length,craftedStats:plan.weapons.craftedStats.length,sources:plan.weapons.sources,levels:plan.weapons.levels,steps:weaponSteps(plan.weapons,plan.scenarios.length)};
       const trinkets=plan.trinkets&&{specs:plan.trinkets.specs.length,trinkets:plan.trinkets.trinkets,candidates:plan.trinkets.candidates,skipped:plan.trinkets.skipped,tanks:plan.trinkets.specs.filter(s=>s.tank).length,sources:plan.trinkets.sources,levels:plan.trinkets.levels,steps:trinketSteps(plan.trinkets,plan.scenarios.length),model:plan.trinkets.model,estimate:plan.trinkets.estimate,screened:plan.trinkets.specs.filter(s=>new Set(s.candidates.map(c=>c.itemId)).size>plan.trinkets.finalists).length};
-      return json(res,200,{trinkets,variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:trinkets?trinkets.steps:weapons?weapons.steps:crests||vault?plan.scenarios.length:bis?bis.steps:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,bis,crests,vault,weapons});
+      return json(res,200,{trinkets,variants:plan.variants.map(v=>({name:v.name,baseline:!!v.baseline})),total:trinkets?trinkets.steps:weapons?weapons.steps:crests||vault?plan.scenarios.length:upgrade?upgrade.steps:plan.variants.length*plan.scenarios.length,warnings:plan.profile.warnings,search:plan.search,upgrade,crests,vault,weapons});
     }
     if(req.method==='POST'&&route==='/api/jobs'){ready();if(updater.switching)throw new Error('SimC is switching to the new engine. Try again in a moment.');const request=await body(req);const plan=await prepare(request,catalog,talentData,season);return json(res,201,jobs.public(await jobs.add(plan,request)));}
     if(req.method==='GET'&&route==='/api/jobs/active')return json(res,200,jobs.activeJobs());
@@ -243,18 +239,6 @@ const server=http.createServer(async(req,res)=>{
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
       return res.end(html);
     }
-    // Best in Slot's report page, built like the upgrade report: from the finished job, with no script of its own.
-    const bisReport=route.match(/^\/bis-report\/([\da-f-]{36})\.html$/);
-    if(req.method==='GET'&&bisReport){
-      const job=jobs.jobs.get(bisReport[1]);
-      if(!job?.bis)return json(res,404,{error:'No Best in Slot job with that id.'});
-      const request=JSON.parse(await fs.readFile(path.join(runsDir,job.id,'request.json'),'utf8'));
-      let info={};try{info=parseProfile(request.profile).info;}catch{}
-      const html=bisReportPage(jobs.public(job),{info,armory:isArmoryProfile(request.profile)});
-      const filename=`best-in-slot-${String(info.name||job.name).normalize('NFKD').replace(/[^A-Za-z0-9-]+/g,'_')}-${new Date(job.finished||job.created).toISOString().slice(0,10)}.html`;
-      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8',...(url.searchParams.has('download')?{'Content-Disposition':`attachment; filename="${filename}"`}:{})});
-      return res.end(html);
-    }
     const report=route.match(/^\/reports\/([\da-f-]{36})\/(\d{3}\.(?:html|json|simc)|request\.json)$/);
     if(req.method==='GET'&&report){
       const data=await fs.readFile(path.join(runsDir,report[1],report[2]));
@@ -262,7 +246,7 @@ const server=http.createServer(async(req,res)=>{
       // Reports are generated by SimC. Serve downloads so their scripts never share this app's origin.
       res.writeHead(200,{'Content-Type':ext==='.json'?'application/json':'application/octet-stream','Content-Disposition':`attachment; filename="${report[2]}"`});return res.end(data);
     }
-    const assets={'/':'index.html','/app.js':'app.js','/mplus.js':'mplus.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/bis.js':'bis.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/vault.js':'vault.js','/weapons.js':'weapons.js','/trinkets.js':'trinkets.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/logs.js':'logs.js','/armory.js':'armory.js','/style.css':'style.css'};
+    const assets={'/':'index.html','/app.js':'app.js','/mplus.js':'mplus.js','/items.js':'items.js','/wowhead.js':'wowhead.js','/features.js':'features.js','/upgrades.js':'upgrades.js','/crests.js':'crests.js','/crestplan.js':'crestplan.js','/vault.js':'vault.js','/weapons.js':'weapons.js','/trinkets.js':'trinkets.js','/tank.js':'tank.js','/engine.js':'engine.js','/activity.js':'activity.js','/environment.js':'environment.js','/wow.js':'wow.js','/logs.js':'logs.js','/armory.js':'armory.js','/style.css':'style.css'};
     if(req.method==='GET'&&assets[route]){const file=assets[route];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});return res.end(await fs.readFile(path.join(root,'public',file)));}
     json(res,404,{error:'Not found.'});
   }catch(e){json(res,e.code==='ENOENT'?404:400,{error:e.message});}
