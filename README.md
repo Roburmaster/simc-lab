@@ -175,6 +175,8 @@ Known limits: boss mechanics, movement, deaths and crowd control are not simulat
 
 Protection Warrior, Protection Paladin, Blood Death Knight, Guardian Druid, Brewmaster Monk and Vengeance Demon Hunter are detected on import. Every mode (Quick Sim, Enchant Lab, Gear Compare, Upgrade Finder, Crest Planner, Great Vault and Talent Search) then ranks results on DPS and survival.
 
+**Tank Sim** has its own place in the menu: the imported tank against a boss and its adds, one simulation per fight you tick (the boss alone, the boss with 2 adds, the boss with 4 adds), with the numbers a tank cares about: damage taken per second and as a share of your health, healing and absorbs, how much of the fight you survive, how often you die, and your DPS. It needs a tank specialization.
+
 SimC's built-in tank dummy uses level-70 damage values and never threatens a Midnight tank, and SimC gives players infinite health by default. SimC Lab replaces it with a calibrated boss, tuned once per job against the imported gear and then shared by every variant and scenario:
 
 - Sustained damage: melee swings plus a magic damage-over-time effect, scaled until the imported gear takes the chosen share of its maximum health per second after its own mitigation.
