@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {isTank,normalizeTank,bossLines,survivalLines,calibrate,survivalGain,tankComparison,profilesetTank,actorTank} from '../lib/tank.mjs';
 import {selectFinalists} from '../lib/upgrades.mjs';
-import {inputFor} from '../lib/engine.mjs';
+import {inputFor,playerActorIndex} from '../lib/engine.mjs';
 
 test('tank specs are detected and settings are validated',()=>{
   assert.ok(isTank({class:'warrior',spec:'protection'}));assert.equal(isTank({class:'warrior',spec:'fury'}),false);
@@ -81,4 +81,27 @@ test('tank finalists are chosen by score, not DPS',()=>{
   const screen={baseline:{dps:100,error95:0},rows:[{key:'a',dps:130,score:-5,scoreError:1},{key:'b',dps:90,score:4,scoreError:1},{key:'c',dps:95,score:-0.5,scoreError:1}]};
   assert.deepEqual(selectFinalists(candidates,screen,24,{boss:{}}).map(c=>c.key),['b','c']);
   assert.deepEqual(selectFinalists(candidates,screen,24).map(c=>c.key),['a']);
+});
+
+test('with adds on, every target beyond the first is an enemy that hits the tank, and the player moves down the actor list',()=>{
+  const info={class:'deathknight',spec:'blood'};
+  assert.equal(normalizeTank({preset:'mythic'},info).adds,false,'off unless asked for, so the labs are unchanged');
+  const tank=normalizeTank({preset:'mythic',adds:true,addDamage:25},info);
+  assert.equal(tank.adds,true);assert.equal(tank.addDamage,25);
+  assert.throws(()=>normalizeTank({adds:true,addDamage:150},info),/addDamage/);
+  const boss={auto:1000,dot:0,buster:0,healGap:5,immortal:false,health:1e6,pressure:5};
+  const lines=bossLines(boss,3,25);
+  assert.equal(lines.filter(l=>l.startsWith('enemy=')).length,4,'the boss and three adds');
+  assert.ok(lines.includes('enemy=Tank_Add_3'));
+  assert.match(lines.join('\n'),/enemy=Tank_Add_1\nactions=\/auto_attack,damage=250,range=25,attack_speed=2,aoe_tanks=1/);
+  const settings={iterations:1,targetError:0,duration:60,threads:1,environment:null,tank:{...tank,boss}};
+  const text=inputFor({text:'deathknight="Tank"\nspec=blood'},settings,{style:'Patchwerk',targets:4},{json:'a',html:'b'});
+  assert.ok(text.indexOf('enemy=Tank_Add_3')<text.indexOf('deathknight='),'every enemy is defined before the player');
+  assert.match(text,/desired_targets=4/);
+  assert.equal(playerActorIndex(settings,{style:'Patchwerk',targets:4}),4);
+  assert.equal(playerActorIndex(settings,{style:'Patchwerk',targets:1}),1);
+  // Without the option a second target is a plain target, as before.
+  const plain={...settings,tank:{...tank,adds:false,boss}};
+  assert.doesNotMatch(inputFor({text:''},plain,{style:'Patchwerk',targets:4},{json:'a',html:'b'}),/Tank_Add/);
+  assert.equal(playerActorIndex(plain,{style:'Patchwerk',targets:4}),1);
 });
