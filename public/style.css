@@ -138,5 +138,3 @@
 #log-side .engine-actions .button,#log-sim .engine-actions .button{width:auto}.cmp-timeline{overflow-x:auto;padding-bottom:6px}.cmp-timeline .lane{grid-template-columns:60px minmax(1800px,1fr)}
 
 .upgrade-card:has([data-bis-source]:not(:checked)) .two-col,.upgrade-card:has([data-bis-source]:not(:checked)) label:not(.upgrade-toggle){opacity:.45}
-
-.bis-checks{display:grid;gap:10px;align-content:center}
