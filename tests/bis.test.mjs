@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {searchBis,bisSteps,assemble,bisContext,buildPool,ranksFrom,pickOf,neighbors,signature,upgradeOptions,bagCandidates,activeSets,depths,stages,groupOf} from '../lib/bis.mjs';
+import {catalystCandidates,tierPieces,searchBis,bisSteps,assemble,bisContext,buildPool,ranksFrom,pickOf,neighbors,signature,upgradeOptions,bagCandidates,activeSets,depths,stages,groupOf} from '../lib/bis.mjs';
 import {shoppingList,slotRows,bisReportPage} from '../lib/bispage.mjs';
 
 // A toy character whose DPS is a plain sum of what each worn item is worth, plus a bonus for tier pieces and a penalty
 // when two clashing trinkets are worn together. No SimC: the point is that the search finds what the numbers say.
 const worth={1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:5,20:2,11:4,21:1,12:6,22:3,13:3,23:.5,14:2,30:8,31:7,32:1,40:10,41:9,42:5};
 const tier=new Set([20,21,22,23]);
+let tierBonus=true;
 const slotOfItem={1:'head',2:'neck',3:'finger1',4:'finger2',5:'trinket1',6:'trinket2',7:'shoulder',8:'chest',9:'legs'};
 const gearText=Object.entries(slotOfItem).map(([id,slot])=>`${slot}=,id=${id}`).join('\n');
 const gear=Object.fromEntries(Object.entries(slotOfItem).map(([id,slot])=>[slot,{slot,id:Number(id),value:`,id=${id}`}]));
@@ -28,7 +29,7 @@ function toyDps(text,lines=[]){
   const ids=Object.values(worn);
   let dps=1000+ids.reduce((s,id)=>s+(worth[id]||0),0);
   const pieces=ids.filter(id=>tier.has(id)).length;
-  if(pieces>=2)dps+=30;if(pieces>=4)dps+=80;
+  if(tierBonus){if(pieces>=2)dps+=30;if(pieces>=4)dps+=80;}
   if(ids.includes(40)&&ids.includes(41))dps-=20;
   if(ids.includes(30)&&ids.includes(31))dps-=15;
   return dps;
@@ -158,4 +159,52 @@ test('the report names the set slot by slot, groups it by where it drops, and es
 test('rings and trinkets collapse to one group each',()=>{
   assert.equal(groupOf('finger2'),'finger');assert.equal(groupOf('trinket1'),'trinket');assert.equal(groupOf('main_hand'),'main_hand');
   void pickOf;void neighbors;void ranksFrom;
+});
+
+test('the search can be held to a 4 piece tier set, and says which slots are cheapest to make tier',async()=>{
+  tierBonus=false;
+  try{
+    const worn=h=>Object.fromEntries(h.run.set.map(x=>[x.slot,x.itemId]));
+    const count=w=>Object.values(w).filter(id=>tier.has(id)).length;
+    // Without a tier bonus the loose items are better and the free search wears none of the set.
+    const free=harness({plan:plan({tierItems:[20,21,22,23],requireSet:false,rounds:2})});await searchBis(free.env);
+    assert.equal(count(worn(free)),0);
+    // Held to four, it wears all four it can reach, and the free set is still simulated to show the cost.
+    const held=harness({plan:plan({tierItems:[20,21,22,23],requireSet:true,rounds:2})});await searchBis(held.env);
+    assert.equal(count(worn(held)),4);
+    assert.equal(held.run.catalyst.pieces,4);
+    assert.equal(held.run.variants.find(v=>v.allowed===false)?.tier,0,'the set without the rule is shown, marked as not allowed');
+    assert.ok(held.run.variants.find(v=>v.key===held.run.start).allowed);
+    // Cheapest slot first: head, shoulders and chest lose 3 each, legs 2.5.
+    const costs=held.run.catalyst.slots.map(x=>x.cost);
+    assert.deepEqual([...costs].sort((a,b)=>a-b),costs);
+    assert.equal(held.run.catalyst.slots[0].group,'legs');
+    assert.ok(held.run.catalyst.slots.every(x=>x.chosen));
+    assert.equal(held.done(),bisSteps(plan({rounds:2}).bis,1));
+    // Fewer than four on offer: the rule cannot be met, so the search says so and goes on without it.
+    const short=harness({plan:plan({candidates:candidates.filter(c=>c.itemId!==23),tierItems:[20,21,22,23],requireSet:true,rounds:2})});await searchBis(short.env);
+    assert.match(short.run.notes.join(' '),/Fewer than 4 pieces/);
+    assert.equal(count(worn(short)),0);
+  }finally{tierBonus=true;}
+});
+
+test('the Catalyst offers every tier piece at the level of each source that can feed it',()=>{
+  const season={entries:[
+    {item:{id:20,name:'Tier Helm',itemClass:4,itemSubClass:4,inventoryType:1,stats:[{id:74}],bonusLists:[111]},source:{kind:'raid',token:'Helm Token',group:1}},
+    {item:{id:21,name:'Tier Shoulders',itemClass:4,itemSubClass:4,inventoryType:3,stats:[{id:74}]},source:{kind:'raid',token:'Shoulder Token',group:1}},
+    {item:{id:99,name:'Loose Helm',itemClass:4,itemSubClass:4,inventoryType:1,stats:[{id:74}]},source:{kind:'raid',group:1}},
+    {item:{id:98,name:'Other Class Helm',itemClass:4,itemSubClass:4,inventoryType:1,allowableClasses:[2],stats:[{id:74}]},source:{kind:'raid',token:'Other',group:1}}],
+    weaponSpecs:[],bonusSockets:{},tracks:[{id:617,name:'Hero',levels:[{level:6,max:6,bonusId:13999,itemLevel:321}]}]};
+  const char={info:{class:'warrior',spec:'arms',level:90},gear:{head:{slot:'head',id:1,value:',id=1,enchant_id=5'},shoulder:{slot:'shoulder',id:7,value:',id=7'}}};
+  const items=new Map([[20,{inventoryType:1}],[21,{inventoryType:3}],[99,{inventoryType:1}]]);
+  assert.deepEqual([...tierPieces(season,char.info,71).keys()].sort(),[20,21],'only the own class pieces that tokens turn into');
+  const found=catalystCandidates(char,{mplus:{enabled:true,track:617,level:6},crafted:{enabled:true,itemLevel:331}},season,{items},71);
+  assert.equal(found.length,4,'two pieces at two levels');
+  const helm=found.filter(c=>c.itemId===20);
+  assert.deepEqual(helm.map(c=>c.itemLevel).sort(),[321,331]);
+  assert.match(helm.find(c=>c.itemLevel===321).value,/bonus_id=111[/]13999/,'the piece keeps its own bonus and the source level');
+  assert.match(helm.find(c=>c.itemLevel===331).value,/ilevel=331/);
+  assert.match(helm[0].value,/enchant_id=5/,'the enchant carries over');
+  assert.equal(helm[0].sources[0].origin,'catalyst');
+  assert.equal(catalystCandidates(char,{raid:{enabled:true}},season,{items},71).length,0,'a raid piece needs no Catalyst');
 });

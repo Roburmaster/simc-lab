@@ -16,7 +16,7 @@ const capture=process.env.BIS_CAPTURE&&(await(await fetch(base+'/api/wow/capture
 if(process.env.BIS_CAPTURE)assert.ok(capture?.text,'No such captured character.');
 const profile=capture?capture.text:(await referenceProfile(spec)).split('\n').filter(l=>!l.startsWith('actions')).map(weak).join('\n');
 const bis={depth:'quick',bags:true,
-  raid:{enabled:true,difficulty:sources.difficulties.at(-1).track,encounters:sources.raids.at(-1).encounters.slice(0,2).map(e=>e.id)},
+  raid:{enabled:!process.env.BIS_NO_RAID,difficulty:sources.difficulties.at(-1).track,encounters:sources.raids.at(-1).encounters.slice(0,2).map(e=>e.id)},
   mplus:{enabled:true,track:hero.id,level:hero.levels.at(-1).level,dungeons:[sources.dungeons[0].id]},
   crafted:{enabled:true,itemLevel:sources.craftedCap||hero.levels.at(-1).itemLevel,embellishments:[]}};
 // BIS_TANK=heroic runs a tank specialization (BIS_SPEC=Death_Knight_Blood) on the weighted damage and survival score.
@@ -37,5 +37,10 @@ else{
   assert.ok(run.final.current.dps>0&&run.final.dps>0,JSON.stringify(run.final));
   console.log(`PASS: ${run.final.current.dps.toFixed(0)} -> ${run.final.dps.toFixed(0)} DPS (${run.final.gain.toFixed(2)} %), ${run.rounds.length} refinement round(s)`);
   for(const s of run.final.slots)console.log(' ',s.slot,result.bis.candidates.find(c=>c.key===s.key)?.name,s.worth?.toFixed(2));
+}
+if(run.catalyst){
+  console.log(`Tier set ${run.catalyst.set}: ${run.catalyst.pieces} pieces in the set${run.catalyst.required?' (required)':''}`);
+  for(const s of run.catalyst.slots)console.log(`  ${s.group.padEnd(9)} tier ${s.tier.name} (${s.tier.origin||'worn'}, ${s.tier.rank.toFixed(2)}) vs ${s.alt.name} (${s.alt.rank.toFixed(2)}) cost ${s.cost.toFixed(2)} ${s.chosen?(s.catalyzed?'IN SET via catalyst':'IN SET'):''}`);
+  if(process.env.BIS_REQUIRE_TIER)assert.ok(run.catalyst.pieces>=4||run.notes.some(n=>/Fewer than 4/.test(n)),'the tier set was required');
 }
 const page=await fetch(`${base}/bis-report/${job.id}.html`);assert.equal(page.status,200);assert.match(await page.text(),/Best in Slot/);
