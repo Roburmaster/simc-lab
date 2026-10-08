@@ -34,10 +34,10 @@ async function setMode(value){mode=value;$$('.nav').forEach(b=>b.classList.toggl
   const lab=['weapons','trinkets'].includes(value);
   // Trinket Lab carries every setting it uses in its own panel, so the rest of the app's settings are out of sight.
   document.body.classList.toggle('clean-lab',value==='trinkets');
-  $('.import-panel').hidden=lab;tank.forWeapons(value==='weapons');
+  $('.import-panel').hidden=lab;tank.forWeapons(value==='weapons');syncTankStyles();
   if(value==='history')await loadHistory();else if(value==='wow')await wow.refresh();else updateCount();}
 $$('.nav').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode).catch(e=>notice(e.message))));
-async function importProfile(){notice('');const text=$('#profile').value;const parsed=await api('/api/import',{profile:text});profile=parsed;importedText=text;selections={};safeStore('simc-lab-profile',text);$('#character').hidden=false;$('#character').innerHTML=`<span class="character-icon">◈</span><div><strong>${esc(parsed.info.name)}</strong><p>${esc(parsed.info.race)} · ${esc(parsed.info.spec)} ${esc(parsed.info.class)} · Level ${esc(parsed.info.level)}</p></div>${parsed.armory?'<span class="pill" title="Imported from the Armory. Not sent to the WoW addon.">Armory</span>':''}<span class="pill">${Object.keys(parsed.gear).length} gear slots</span>`;$('#import-status').textContent=`Imported · ${Object.keys(parsed.gear).length} gear slots · ready to simulate`;renderEnchants();renderImportedChoices();features.render(parsed);crests.show(parsed);tank.show(parsed);updateCount();return parsed;}
+async function importProfile(){notice('');const text=$('#profile').value;const parsed=await api('/api/import',{profile:text});profile=parsed;importedText=text;selections={};safeStore('simc-lab-profile',text);$('#character').hidden=false;$('#character').innerHTML=`<span class="character-icon">◈</span><div><strong>${esc(parsed.info.name)}</strong><p>${esc(parsed.info.race)} · ${esc(parsed.info.spec)} ${esc(parsed.info.class)} · Level ${esc(parsed.info.level)}</p></div>${parsed.armory?'<span class="pill" title="Imported from the Armory. Not sent to the WoW addon.">Armory</span>':''}<span class="pill">${Object.keys(parsed.gear).length} gear slots</span>`;$('#import-status').textContent=`Imported · ${Object.keys(parsed.gear).length} gear slots · ready to simulate`;renderEnchants();renderImportedChoices();features.render(parsed);crests.show(parsed);tank.show(parsed);syncTankStyles();updateCount();return parsed;}
 $('#import').addEventListener('click',async()=>{try{$('#import').disabled=true;await importProfile();}catch(e){notice(e.message);}finally{$('#import').disabled=false;}});
 $('#profile').addEventListener('input',()=>{$('#import-status').textContent='The profile changed. Import it again before selecting enchants.';profile=null;selections={};$('#character').hidden=true;renderEnchants();updateCount();});
 $('#example').addEventListener('click',async()=>{try{$('#profile').value=(await api('/api/example')).text;await importProfile();$('#import-status').textContent='SimC example: MID2 Frost Mage. Replace it with your own /simc export.';}catch(e){notice(e.message);}});
@@ -80,6 +80,14 @@ const styleNames={SilvermoonDummies:'Silvermoon dummies'};
 // SimC's Dungeon Slice is one boss for six minutes whatever it is told, so those two fields are locked and show it.
 const sliceNote='Dungeon Slice is a 6 minute slice of an M+ dungeon with one boss. SimC sets the duration and the target count itself, so those fields are locked.';
 let beforeSlice=null;
+// Nothing in Dungeon Slice attacks the tank, so a tank specialization has no survival to measure there: the choice is off
+// for an imported tank (the labs run their own fights and are left alone).
+function syncTankStyles(){
+  const option=[...$('#fight-style').options].find(o=>o.value==='DungeonSlice');if(!option)return;
+  const off=!!profile?.isTank&&!['weapons','trinkets'].includes(mode);
+  option.disabled=off;option.title=off?'Not available for tank specializations: nothing in this fight attacks the tank.':'';
+  if(off&&$('#fight-style').value==='DungeonSlice'){$('#fight-style').value='Patchwerk';syncFightStyle();}
+}
 function syncFightStyle(){
   const note=dummyStyles[$('#fight-style').value],route=$('#fight-style').value===routeStyle,slice=$('#fight-style').value==='DungeonSlice';
   if(slice&&!beforeSlice){beforeSlice={targets:$('#targets').value,duration:$('#duration').value};$('#targets').value=1;$('#duration').value=360;}
