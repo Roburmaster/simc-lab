@@ -144,13 +144,20 @@ test('crafted pieces are tried with each embellishment, and nothing breaks the e
   assert.equal(buildCandidates(profile,{crafted:{...request.crafted,embellishments:[]}},data,catalog,71).candidates.filter(c=>c.embellishment).length,0,'an empty choice means plain only');
   assert.throws(()=>buildCandidates(profile,{crafted:{...request.crafted,embellishments:[9]}},data,catalog,71),/unknown selection/);
   // Two embellished items already worn: only the slots that hold one can take another.
+  const lines=profilesetLines;
   const full={...profile,gear:{...profile.gear,wrist:gear('wrist',50,',bonus_id=8790/8960/12693'),finger2:gear('finger2',41)}};
   const capped=buildCandidates(full,request,data,catalog,71);
   assert.ok(capped.candidates.some(c=>c.slot==='wrist'&&c.embellishment),'replacing an embellished piece stays legal');
-  assert.ok(!capped.candidates.some(c=>c.slot==='feet'&&c.embellishment),'a third embellishment is never offered');
+  assert.ok(!capped.candidates.some(c=>c.slot==='feet'&&c.embellishment&&!c.freed),'a third embellishment is never offered as it is');
+  // It is offered worn in place of an embellishment that can come off: the wrists go plain, the born-embellished band stays.
+  const swapped=capped.candidates.filter(c=>c.slot==='feet'&&c.embellishment);
+  assert.ok(swapped.length>0&&swapped.every(c=>c.freed?.slot==='wrist'&&c.extra.length===1&&c.extra[0]==='wrist=,id=50,bonus_id=8790/12693'&&!c.extra[0].includes('8960')),'the wrists are worn plain beside it');
+  assert.ok(capped.freed>=swapped.length);
+  assert.match(lines(swapped.slice(0,1),full,catalog)[1],/^profileset\."c\d+"\+=wrist=/,'the plain piece is part of the same profileset');
   assert.ok(capped.candidates.some(c=>c.slot==='feet'&&!c.embellishment));
-  assert.ok(capped.candidates.some(c=>c.slot==='finger2'&&c.itemId===41)&&!capped.candidates.some(c=>c.slot==='finger1'&&c.itemId===41),'a born-embellished band only replaces an embellished ring');
-  assert.ok(capped.blocked>0);assert.deepEqual(capped.limitsUsed.map(h=>h.slot).sort(),['finger2','wrist']);
+  assert.ok(capped.candidates.some(c=>c.slot==='finger2'&&c.itemId===41&&!c.freed)&&!capped.candidates.some(c=>c.slot==='finger1'&&c.itemId===41&&!c.freed),'a born-embellished band replaces an embellished ring as it is, and a plain one only by taking the wrists plain');
+  assert.ok(capped.candidates.some(c=>c.slot==='finger1'&&c.itemId===41&&c.freed?.slot==='wrist'));
+  assert.equal(capped.blocked,0,'every embellished piece can be worn in place of the wrists, so none is left out');assert.ok(capped.freed>0);assert.deepEqual(capped.limitsUsed.map(h=>h.slot).sort(),['finger2','wrist']);
 });
 
 test('embellishment pairs are the best embellished upgrades that can be worn together',async()=>{
@@ -203,4 +210,23 @@ test('the pairs of one crafted piece are one item in the final round and the lis
   // Size 1 is one item, and every pair of it that could win goes with it; the other item stays out.
   assert.deepEqual(selectFinalists(list,{rows,baseline:{dps:200000,error95:50}},1).map(x=>x.key),['a','b','c']);
   assert.deepEqual(selectFinalists(list,{rows,baseline:{dps:200000,error95:50}},2).map(x=>x.key),['a','b','c','o1']);
+});
+
+test('a piece that cannot give up anything stays out, and pairs never reuse a piece one part took off',async()=>{
+  const {embellishmentPairs}=await import('../lib/upgrades.mjs');
+  const data=embSeason();
+  // Both worn embellishments are born embellished: nothing can be taken off, so no embellished piece is offered.
+  const stuck={...profile,gear:{...profile.gear,finger1:gear('finger1',41),finger2:gear('finger2',41)}};
+  const out=buildCandidates(stuck,{crafted:{enabled:true,itemLevel:321,stats:8791}},data,catalog,71);
+  assert.ok(!out.candidates.some(c=>c.embellishment&&c.slot!=='finger1'&&c.slot!=='finger2'));
+  assert.equal(out.freed,0);
+  // Two parts that take off the same worn piece are not worn together.
+  const one={...profile,gear:{...profile.gear,wrist:gear('wrist',50,',bonus_id=8790/8960/12693')}};
+  const cands=buildCandidates(one,{crafted:{enabled:true,itemLevel:321,stats:8791}},data,catalog,71).candidates;
+  const rows=cands.map((c,i)=>({key:c.key,dps:1100-i}));
+  for(const p of embellishmentPairs(cands,rows,{dps:1000},one,data,catalog)){
+    const freed=p.parts.map(c=>c.freed?.slot).filter(Boolean);
+    assert.equal(new Set(freed).size,freed.length);
+    assert.ok(!freed.some(slot=>p.parts.some(c=>c.slot===slot)),'a part never replaces the piece the other took off');
+  }
 });

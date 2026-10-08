@@ -65,12 +65,13 @@ export function upgradeUI({api,notice,updateCount}){
     clearTimeout(countTimer);if(!data)return;
     if(!hasProfile){$('#upgrade-count').textContent='Import a character to count candidates.';return;}
     $('#upgrade-count').textContent='Counting candidates …';
-    countTimer=setTimeout(async()=>{try{const preview=await api('/api/preview',request());const u=preview.upgrade;$('#upgrade-count').innerHTML=`<strong>${u.candidates} candidates</strong> across ${u.slots} slots · ${preview.total} SimC runs${u.embellished?`<br>${u.embellished} with an embellishment`:''}${u.limitsUsed?.length?`<br>You wear: ${u.limitsUsed.map(h=>esc(h.name)).join(', ')}`:''}${u.blocked?` · ${u.blocked} left out by the equip limit`:''}`;}catch(e){$('#upgrade-count').textContent=e.message;}},350);
+    countTimer=setTimeout(async()=>{try{const preview=await api('/api/preview',request());const u=preview.upgrade;$('#upgrade-count').innerHTML=`<strong>${u.candidates} candidates</strong> across ${u.slots} slots · ${preview.total} SimC runs${u.embellished?`<br>${u.embellished} with an embellishment`:''}${u.limitsUsed?.length?`<br>You wear: ${u.limitsUsed.map(h=>esc(h.name)).join(', ')}`:''}${u.freed?`<br>${u.freed} worn in place of an embellishment you wear now`:''}${u.blocked?` · ${u.blocked} left out by the equip limit`:''}`;}catch(e){$('#upgrade-count').textContent=e.message;}},350);
   }
   // Rings and trinkets are simulated in both of their slots; the filter treats each pair as one slot.
   const family=slot=>String(slot||'').replace(/[12]$/,'');
   // The same identity as the server's: one crafted piece in several stat pairs is a single item, and the list keeps its best pair.
   const variantOf=c=>c.craftedStat?`${c.itemId}|${c.embellishment||''}`:c.value;
+  const freedNote=c=>c.freed?` · worn in place of the ${esc(c.freed.embellishment)} on ${esc(c.freed.item)}`:'';
   const familyNames={head:'Head',neck:'Neck',shoulder:'Shoulders',back:'Back',chest:'Chest',wrist:'Wrists',hands:'Hands',waist:'Waist',legs:'Legs',feet:'Feet',finger:'Rings',trinket:'Trinkets',main_hand:'Main hand',off_hand:'Off hand'};
   // Picking a slot keeps every measured item for it, upgrades and the rest, in every list below.
   function slotFilterBar(rows){
@@ -115,7 +116,7 @@ export function upgradeUI({api,notice,updateCount}){
       if(upgrades.length){
         const groups=new Map();
         for(const r of upgrades)for(const src of r.c.sources){const g=groups.get(src.group);if(!g||r.rank>g.r.rank)groups.set(src.group,{src,r});}
-        html+=`<h4 class="upgrade-heading">Best upgrade per source</h4><div class="upgrade-source-list">${[...groups.values()].sort((a,b)=>b.r.rank-a.r.rank).map(({src,r})=>`<div class="upgrade-source"><span><small>${esc(originNames[src.origin])}</small><strong>${esc(src.groupName)}</strong></span><span>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · ${r.c.itemLevel}${r.c.embellishment?` · ${esc(r.c.embellishment)}`:''}</small></span><b>+${r.rank.toFixed(2)}${r.tanky?'':' %'}</b></div>`).join('')}</div>`;
+        html+=`<h4 class="upgrade-heading">Best upgrade per source</h4><div class="upgrade-source-list">${[...groups.values()].sort((a,b)=>b.r.rank-a.r.rank).map(({src,r})=>`<div class="upgrade-source"><span><small>${esc(originNames[src.origin])}</small><strong>${esc(src.groupName)}</strong></span><span>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · ${r.c.itemLevel}${r.c.embellishment?` · ${esc(r.c.embellishment)}`:''}${freedNote(r.c)}</small></span><b>+${r.rank.toFixed(2)}${r.tanky?'':' %'}</b></div>`).join('')}</div>`;
         html+=`<h4 class="upgrade-heading">All measured upgrades</h4>${table(upgrades)}`;
       }else if(stages.some(st=>st.stage===2&&st.status==='complete'))html+=`<p class="hint">No final-round candidate beat your current gear${slotFilter==='all'?'':' in this slot'}.</p>`;
       // With a slot picked, what lost in the final round is worth seeing too: that is the answer to
@@ -133,6 +134,17 @@ export function upgradeUI({api,notice,updateCount}){
         }).filter(Boolean);
         if(bestLost.length)html+=`<h4 class="upgrade-heading">Tested, but no better than your gear</h4><p class="hint">The best item measured for each slot without an upgrade. Pick a slot above to see everything measured for it.</p>${table(bestLost)}`;
       }
+      // A crafted piece a guide recommends may have lost in a slot that someone else won: one line per piece.
+      if(slotFilter==='all'){
+        const bestCraft=new Map();
+        for(const r of measured){
+          if(!r.c.sources.some(x=>x.origin==='crafted')||r.stage===2&&r.rank>0)continue;
+          const id=family(r.c.slot)+'|'+r.c.itemId,previous=bestCraft.get(id);
+          if(!previous||r.stage>previous.stage||r.stage===previous.stage&&r.rank>previous.rank)bestCraft.set(id,r);
+        }
+        const crafts=[...bestCraft.values()].sort((a,b)=>b.stage-a.stage||b.rank-a.rank);
+        if(crafts.length)html+=`<details class="log-details"><summary>Crafted gear measured but no better than yours (${crafts.length})</summary><p class="hint">One line per crafted piece: its best stat pair and embellishment, final round over screening.</p>${table(crafts)}</details>`;
+      }
       if(slotFilter==='all')html+=pairsSection(job,s,candidates,baselines[3]);
       const screened=rows.filter(r=>r.stage===1);
       if(screened.length)html+=`<details class="log-details"${slotFilter==='all'?'':' open'}><summary>Screening results not simulated again (${screened.length})</summary>${table(screened.sort((a,b)=>b.rank-a.rank))}</details>`;
@@ -147,13 +159,13 @@ export function upgradeUI({api,notice,updateCount}){
     const rows=job.results.filter(r=>r.scenario===s&&r.stage===3&&r.status==='complete').map(r=>{const pair=pairs.find(p=>p.key===r.key);if(!pair)return null;
       const tanky=Number.isFinite(r.score),percent=100*(r.dps-base.dps)/Math.max(1,base.dps);return {r,pair,tanky,rank:tanky?r.score:percent,percent};}).filter(Boolean).sort((a,b)=>b.rank-a.rank);
     if(!rows.length)return '';
-    const part=p=>{const c=candidates.get(p.key);return c?`${itemLink(c.itemId,c.name,c.value)}<small>${esc(slotNames[p.slot]||p.slot)} · ${c.itemLevel}${c.embellishment?` · <b>${esc(c.embellishment)}</b>`:''}</small>`:esc(p.key);};
+    const part=p=>{const c=candidates.get(p.key);return c?`${itemLink(c.itemId,c.name,c.value)}<small>${esc(slotNames[p.slot]||p.slot)} · ${c.itemLevel}${c.embellishment?` · <b>${esc(c.embellishment)}</b>`:''}${freedNote(c)}</small>`:esc(p.key);};
     const limits=job.upgrade.limitsUsed?.length?` Next to what you keep wearing: ${job.upgrade.limitsUsed.map(h=>esc(h.name)).join(', ')}, unless a pair replaces it.`:'';
     return `<h4 class="upgrade-heading">Best embellishment pairs</h4><p class="hint">The best embellished upgrades from the final round, worn two at a time. Only pairs you can equip together are shown.${limits}</p><table class="result-table"><thead><tr><th>First</th><th>Second</th><th>${rows[0].tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map(({r,pair,tanky,percent},i)=>`<tr class="${i===0&&(tanky?r.score:percent)>0?'winner':''}"><td>${part(pair.parts[0])}</td><td>${part(pair.parts[1])}</td><td>${tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %</small>`:`${percent>=0?'+':''}${percent.toFixed(2)} %<small>${number(r.dps-base.dps)} DPS</small>`}</td></tr>`).join('')}</tbody></table>`;
   }
   function table(rows){
     const max=Math.max(...rows.map(r=>Math.abs(r.rank)),1e-9);const tanky=rows.some(r=>r.tanky);
-    return `<table class="result-table"><thead><tr><th>Item</th><th>Source</th><th>${tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i===0&&r.rank>0&&r.stage===2?'winner':''}"><td>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · item level ${r.c.itemLevel}${r.c.embellishment?` · <b>${esc(r.c.embellishment)}</b>`:''}${r.stage===1?' · screening only':''}</small>${r.rank>0?`<div class="bar"><span style="width:${(r.rank/max*100).toFixed(1)}%"></span></div>`:''}</td><td class="upgrade-source-cell">${r.c.sources.map(src=>`<small>${esc(src.label)}</small>`).join('')}</td><td>${r.tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %${r.uncertain?' · uncertain':''}</small>`:`${r.delta>=0?'+':''}${r.percent.toFixed(2)} %<small>${r.delta>=0?'+':''}${number(r.delta)} DPS${r.uncertain?' · uncertain':''}</small>`}</td></tr>`).join('')}</tbody></table>`;
+    return `<table class="result-table"><thead><tr><th>Item</th><th>Source</th><th>${tanky?'Score':'vs current'}</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i===0&&r.rank>0&&r.stage===2?'winner':''}"><td>${itemLink(r.c.itemId,r.c.name,r.c.value)}<small>${esc(slotNames[r.c.slot]||r.c.slot)} · item level ${r.c.itemLevel}${r.c.embellishment?` · <b>${esc(r.c.embellishment)}</b>`:''}${freedNote(r.c)}${r.stage===1?' · screening only':''}</small>${r.rank>0?`<div class="bar"><span style="width:${(r.rank/max*100).toFixed(1)}%"></span></div>`:''}</td><td class="upgrade-source-cell">${r.c.sources.map(src=>`<small>${esc(src.label)}</small>`).join('')}</td><td>${r.tanky?`${r.score>=0?'+':''}${r.score.toFixed(2)}<small>DPS ${r.dpsGain>=0?'+':''}${r.dpsGain.toFixed(2)} % · survival ${r.survival>=0?'+':''}${r.survival.toFixed(2)} %${r.uncertain?' · uncertain':''}</small>`:`${r.delta>=0?'+':''}${r.percent.toFixed(2)} %<small>${r.delta>=0?'+':''}${number(r.delta)} DPS${r.uncertain?' · uncertain':''}</small>`}</td></tr>`).join('')}</tbody></table>`;
   }
   $('#result-content').addEventListener('click',event=>{
     const chip=event.target.closest('[data-slot-filter]');

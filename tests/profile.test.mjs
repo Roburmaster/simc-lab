@@ -57,3 +57,12 @@ test('uncertainty is standard error of the mean, not iteration spread',()=>{
   const result=resultFrom({sim:{players:[{collected_data:{dps:{mean:1000,mean_std_dev:10,std_dev:500}}}],options:{iterations:100}}});
   assert.ok(Math.abs(result.error95-19.59964)<.0001);assert.throws(()=>resultFrom({sim:{players:[]}}));
 });
+
+test('Dungeon Slice is refused for a tank specialization, because nothing in it attacks the tank',async()=>{
+  const tank=await referenceProfile('Death_Knight_Blood');
+  await assert.rejects(prepare({profile:tank,scenarios:[{style:'DungeonSlice',targets:1}]},catalog),/Dungeon Slice does not work for tank/);
+  const plan=await prepare({profile:tank,scenarios:[{style:'Patchwerk',targets:1}]},catalog);
+  assert.ok(plan.settings.tank,'the same tank on another fight is still a tank run');
+  const dps=await prepare({profile:example,scenarios:[{style:'DungeonSlice',targets:1}]},catalog);
+  assert.equal(dps.scenarios[0].style,'DungeonSlice');
+});
