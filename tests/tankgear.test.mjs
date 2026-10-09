@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {bagCandidates,buildTankGear} from '../lib/tankgear.mjs';
+import {bagCandidates,buildTankGear,jewelryPairs} from '../lib/tankgear.mjs';
 
 const HERO=3445;
 const ladder=(id,name,bonus,first)=>({id,name,levels:[0,1,2,3,4,5].map(i=>({level:i+1,max:6,bonusId:bonus+i,itemLevel:first+[0,3,6,10,13,16][i],discounts:[{currencyId:HERO,scaling:0,accountWide:false}],...(i?{cost:{currencyId:HERO,amount:20}}:{})}))});
@@ -58,4 +58,30 @@ test('an empty bag source says why, and a finalist size outside the list is refu
   const none={...profile,alternatives:[]};
   assert.throws(()=>buildTankGear(none,text,{bags:{}},season,catalog,null),/lists no bag gear/);
   assert.throws(()=>buildTankGear(profile,text,{bags:{},finalists:7},season,catalog,null),/final round size/);
+});
+
+test('trinkets are paired with each other and with the two worn, never the worn pair itself or one item twice',()=>{
+  const worn={info:{class:'druid',spec:'guardian'},gear:{trinket1:{id:11,value:',id=11,bonus_id=1'},trinket2:{id:12,value:',id=12,bonus_id=1'},finger1:{id:21,value:',id=21'},finger2:{id:22,value:',id=22'}},alternatives:[]};
+  const names=new Map([[11,{name:'Worn A'}],[12,{name:'Worn B'}],[21,{name:'Ring A'}],[22,{name:'Ring B'}],[31,{name:'New X'}],[32,{name:'New Y'}],[41,{name:'New Ring'}]]);
+  const cat={items:names};
+  const cands=[{key:'c001',slot:'trinket1',itemId:31,name:'New X',itemLevel:300,value:',id=31',line:'trinket1=,id=31',sources:[]},
+    {key:'c002',slot:'trinket2',itemId:32,name:'New Y',itemLevel:300,value:',id=32',line:'trinket2=,id=32',sources:[]},
+    {key:'c003',slot:'finger1',itemId:41,name:'New Ring',itemLevel:300,value:',id=41',line:'finger1=,id=41',sources:[]}];
+  const rows=[{key:'c001',score:3},{key:'c002',score:2},{key:'c003',score:1}];
+  const pairs=jewelryPairs(cands,rows,worn,{itemLimits:season.itemLimits},cat);
+  const trinkets=pairs.filter(p=>p.family==='trinket'),rings=pairs.filter(p=>p.family==='finger');
+  // Four pieces in the pool: X, Y and the two worn. Six pairs, less the worn pair itself.
+  assert.equal(trinkets.length,5);
+  assert.ok(trinkets.every(p=>p.parts[0].slot!==p.parts[1].slot&&p.parts[0].itemId!==p.parts[1].itemId));
+  assert.ok(!trinkets.some(p=>p.parts.every(x=>x.worn)));
+  // A new trinket beside a worn one takes the other slot, and the line says so.
+  const keep=trinkets.find(p=>p.parts.some(x=>x.itemId===11)&&p.parts.some(x=>x.itemId===31));
+  assert.deepEqual(keep.parts.map(x=>x.line),['trinket1=,id=11,bonus_id=1','trinket2=,id=31']);
+  const keepB=trinkets.find(p=>p.parts.some(x=>x.itemId===12)&&p.parts.some(x=>x.itemId===32));
+  assert.deepEqual(keepB.parts.map(x=>x.line),['trinket2=,id=12,bonus_id=1','trinket1=,id=32']);
+  // Two new ones that both prefer slot 1 share the two slots.
+  const both=trinkets.find(p=>p.parts.every(x=>!x.worn));assert.deepEqual(both.parts.map(x=>x.slot).sort(),['trinket1','trinket2']);
+  // Rings: the one new ring pairs with each worn ring.
+  assert.equal(rings.length,2);
+  assert.deepEqual(pairs.map(p=>p.key),pairs.map((p,i)=>'j'+String(i+1).padStart(3,'0')));
 });

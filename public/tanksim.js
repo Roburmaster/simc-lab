@@ -1,5 +1,6 @@
 import {upgradeUI} from '/upgrades.js';
 import {crestUI} from '/crests.js';
+import {recommendUI} from '/recommend.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -45,6 +46,7 @@ export function tankSimUI({api,notice,updateCount,run,cancel}){
     <div class="tank-run"><div><strong id="tank-run-summary">Waiting for character import</strong><span class="hint" id="tank-run-count"></span></div><div class="run-actions"><button id="tank-run" class="button primary">Run Tank Sim <span>→</span></button><button id="tank-cancel" class="button danger" hidden>Cancel job</button></div></div></section>`);
   const loot=upgradeUI({api,notice,updateCount,host:$('#tank-loot-host'),sfx:'-tank',owner:'tank'});
   const crests=crestUI({api,notice,updateCount,host:$('#tank-crests-host'),sfx:'-tank'});
+  const reco=recommendUI();
   $('#tanksim-panel').addEventListener('change',event=>{
     if(event.target.matches('#tank-loot,#tank-crests'))$(`#${event.target.id}-host`).closest('.tank-source').classList.toggle('off',!event.target.checked);
     updateCount();
@@ -123,7 +125,7 @@ export function tankSimUI({api,notice,updateCount,run,cancel}){
         const x=r.tank,health=x.health||t?.boss?.health,fight=fights.find(f=>f.targets===sc.targets);
         const pct=n=>health?`${(100*n/health).toFixed(1)}% of your health`:'';
         return `<tr><td>${esc(fight?.label||`${sc.targets} targets`)}<small>${esc(sc.style)} · ${sc.targets-1} add${sc.targets===2?'':'s'}</small></td><td>${number(x.dtps)} / sec<small>${pct(x.dtps)} per second</small></td><td>${number(x.hps)} healed + ${number(x.aps)} absorbed / sec<small>net after healing ${number(x.dtps-x.hps)} / sec</small></td><td>${(100*x.alive).toFixed(0)}%<small>of the fight, on average</small></td><td>${x.deaths===undefined?'—':`${(100*x.deaths).toFixed(0)}%`}<small>of ${number(r.iterations||job.settings.iterations)} fights</small></td><td>${number(r.dps)}<small>±${number(r.error95||0)}</small></td></tr>`;}).join('')}</tbody></table><p class="result-note">Damage taken is after your armor, avoidance and absorbs, as SimC counts it. More adds means more damage and more deaths, and that is the point: the same gear holds up differently against a pack than against a single hit. Deaths are against a boss whose tank-busters were sized so your current gear dies in about ${t?.deathTarget??25}% of boss-alone fights.</p>`;
-      return html;
+      return html+reco.html(job,fights);
     },
     loot
   };
