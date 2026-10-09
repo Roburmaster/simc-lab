@@ -107,8 +107,8 @@ export function upgradeUI({api,notice,updateCount}){
       const rows=chosen;
       const upgrades=rows.filter(r=>r.stage===2&&r.rank>0).sort((a,b)=>b.rank-a.rank);
       const scenario=job.scenarios[s];
-      html+=`<section class="result-scenario"><h3>${esc(scenario.style)} <span class="muted">/ ${scenario.targets} targets / ${job.settings.duration} sec</span></h3>`;
-      const base=baselines[2]||baselines[1];if(base)html+=`<p class="hint">Current gear: ${number(base.dps)} DPS${base.error95!==null?` ± ${number(base.error95)}`:''}</p>`;
+      html+=`<section class="result-scenario"><h3>${esc(scenario.style)} <span class="muted">/ ${job.settings.tank?.adds?`boss + ${scenario.targets-1} add${scenario.targets===2?'':'s'}`:`${scenario.targets} targets`} / ${job.settings.duration} sec</span></h3>`;
+      const base=baselines[2]||baselines[1];if(base)html+=`<p class="hint">Current gear: ${number(base.dps)} DPS${base.error95!==null?` ± ${number(base.error95)}`:''}${base.tank?` · takes ${number(base.tank.dtps)} damage per second${base.tank.health?` (${(100*base.tank.dtps/base.tank.health).toFixed(1)}% of your health)`:''}, survives ${(100*base.tank.alive).toFixed(0)}% of the fight${base.tank.deaths!==undefined?`, dies in ${(100*base.tank.deaths).toFixed(0)}% of fights`:''}`:''}</p>`;
       html+=slotFilterBar(measured);
       if(slotFilter!=='all')html+=`<p class="hint">${esc(familyNames[slotFilter]||slotFilter)}: every item measured for this slot, best first.${rows.length?'':' Nothing was measured for it in this job.'}</p>`;
       const stageName=n=>n===1?'Screening':n===3?'Embellishment pairs':'Final round';
