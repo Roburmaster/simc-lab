@@ -25,6 +25,8 @@ export function tankUI({updateCount}){
   function label(){const w=Number($('#tank-weight').value);$('#tank-weight-label').textContent=`${w}% survival · ${100-w}% DPS`;}
   return {
     init(options){presets=options.tankPresets;render();},
+    // Tank Sim carries the boss settings on its own page; every other mode keeps them above the results.
+    mount(slot){const panel=$('#tank-panel');panel.classList.toggle('embedded',!!slot);if(slot)slot.appendChild(panel);else $('#results').insertAdjacentElement('beforebegin',panel);},
     show(profile){active=!!profile?.isTank;scope();},
     forWeapons(on){weapons=!!on;scope();},
     settings(){
