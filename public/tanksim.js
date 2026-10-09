@@ -11,8 +11,9 @@ export const fights=[
   {id:'pack',label:'Boss + 2 adds',targets:3,note:'A small pack: two mobs swing at you for the whole fight on top of the boss.'},
   {id:'pull',label:'Boss + 4 adds',targets:5,note:'A big pull: four mobs swing at you for the whole fight on top of the boss.'}
 ];
-// Only the fight styles where the boss and its adds can attack a tank; the others have no one hitting you.
-const styles=[['Patchwerk','Patchwerk · stationary'],['CastingPatchwerk','Casting Patchwerk · boss casts'],['LightMovement','Light movement'],['HeavyMovement','Heavy movement']];
+// The fights above are the whole description of the encounter, so the style is not a choice: Patchwerk, a boss that stands
+// still and swings. The other styles change nothing the tank's own boss does.
+const style='Patchwerk';
 const consumableKinds=[['flask','Flask'],['food','Food'],['potion','Potion'],['augmentation','Augment rune']];
 
 // Tank Sim is a page of its own: its fights, its simulation settings, its buffs, its boss and its gear sources all live
@@ -26,7 +27,6 @@ export function tankSimUI({api,notice,updateCount,run,cancel}){
     <div class="tank-sections">
       <section class="tank-section"><h3>Fights</h3><p class="hint">Each fight is one simulation. Dungeon Slice, Hectic Add Cleave, the Mythic+ route and the dummies have no mobs that attack a tank, so they are not offered.</p><div class="upgrade-groups" id="tanksim-fights">${fights.map(f=>`<label class="check"><input type="checkbox" data-tanksim="${f.id}" ${f.id==='boss'||f.id==='pull'?'checked':''}><span>${esc(f.label)}<small class="hint"> · ${esc(f.note)}</small></span></label>`).join('')}</div></section>
       <section class="tank-section"><h3>Simulation</h3><div class="tank-grid">
-        <label>Fight style<select id="tank-style">${styles.map(([value,label])=>`<option value="${value}">${esc(label)}</option>`).join('')}</select></label>
         <label>Duration (sec)<input id="tank-duration" type="number" min="10" max="1200" value="300"></label>
         <label>Iterations<select id="tank-iterations"><option value="1000">1 000 · quick test</option><option value="10000" selected>10 000 · standard</option><option value="50000">50 000 · high precision</option><option value="100000">100 000 · very high precision</option><option value="1000000">1 000 000 · maximum</option></select></label>
         <label>Target error (%)<select id="tank-target-error"><option value="0">None · all iterations</option><option value="0.1" selected>0.10%</option><option value="0.05">0.05%</option><option value="0.02">0.02%</option></select></label>
@@ -91,7 +91,6 @@ export function tankSimUI({api,notice,updateCount,run,cancel}){
     },
     // Everything the server needs for a tank job except the character and the boss, which the page adds.
     request(){
-      const style=$('#tank-style').value;
       return {mode:'tank',iterations:Number($('#tank-iterations').value),targetError:Number($('#tank-target-error').value),duration:Number($('#tank-duration').value),threads:Number($('#tank-threads').value),
         environment:environment(),scenarios:chosen().map(f=>({style,targets:f.targets})),tankGear:gear()};
     },
