@@ -116,7 +116,7 @@ export function upgradeUI({api,notice,updateCount,host=null,sfx='',owner='upgrad
       const base=baselines[2]||baselines[1];if(base)html+=`<p class="hint">Current gear: ${number(base.dps)} DPS${base.error95!==null?` ± ${number(base.error95)}`:''}${base.tank?` · takes ${number(base.tank.dtps)} damage per second${base.tank.health?` (${(100*base.tank.dtps/base.tank.health).toFixed(1)}% of your health)`:''}, survives ${(100*base.tank.alive).toFixed(0)}% of the fight${base.tank.deaths!==undefined?`, dies in ${(100*base.tank.deaths).toFixed(0)}% of fights`:''}`:''}</p>`;
       html+=slotFilterBar(measured);
       if(slotFilter!=='all')html+=`<p class="hint">${esc(familyNames[slotFilter]||slotFilter)}: every item measured for this slot, best first.${rows.length?'':' Nothing was measured for it in this job.'}</p>`;
-      const stageName=n=>n===1?'Screening':n===3?'Embellishment pairs':'Final round';
+      const stageName=n=>n===1?'Screening':n===3?'Embellishment pairs':n===4?'Trinket and ring pairs':'Final round';
       for(const st of stages){if(st.status==='failed')html+=`<p class="notice">${stageName(st.stage)} failed: ${esc(st.error)}</p>`;if(st.status==='skipped')html+=`<p class="hint">${esc(st.reason)}</p>`;}
       if(upgrades.length){
         const groups=new Map();

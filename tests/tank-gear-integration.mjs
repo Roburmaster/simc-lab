@@ -25,7 +25,7 @@ const bags=await post('/api/preview',{...common,tankGear:{finalists:24,bags:{}}}
 assert.equal(bags.body.upgrade.candidates,1);assert.deepEqual(bags.body.upgrade.counts,{loot:0,bags:1,crests:0});
 
 // All three sources at once, run for real.
-const gear={finalists:24,bags:{},crests:{levels:'max',affordable:false},loot:{slots:['waist','head'],finalists:24,raid:{enabled:true,difficulty:sources.difficulties.at(-1).track,upgrade:0,encounters:raid.encounters.slice(0,2).map(e=>e.id)}}};
+const gear={finalists:24,bags:{},crests:{levels:'max',affordable:false},loot:{slots:['waist','head','trinket1','trinket2','finger1','finger2'],finalists:24,raid:{enabled:true,difficulty:sources.difficulties.at(-1).track,upgrade:0,encounters:raid.encounters.map(e=>e.id)}}};
 const preview=await post('/api/preview',{...common,tankGear:gear});
 const counts=preview.body.upgrade.counts;assert.ok(counts.bags===1&&counts.loot>0,JSON.stringify(counts));
 const job=await wait((await post('/api/jobs',{...common,tankGear:gear})).body.id);
@@ -39,3 +39,13 @@ for(const s of [0,1]){
   assert.ok(job.results.some(r=>r.scenario===s&&Number.isFinite(r.score)),`Fight ${s} ranks gear on the tank score.`);
 }
 console.log('tank gear ok',JSON.stringify({counts,candidates:job.upgrade.candidates.length,origins:[...origins]}));
+// Trinkets and rings are answered as pairs: stage 4 either ran pairs or says why not, in every fight.
+for(const s of [0,1]){
+  const st=job.stages.find(x=>x.scenario===s&&x.stage===4);assert.ok(st,`Fight ${s} has a pair stage.`);
+  if(st.status==='complete'){
+    const pairs=job.results.filter(r=>r.scenario===s&&r.stage===4&&r.status==='complete');
+    assert.ok(pairs.length&&pairs.every(r=>Number.isFinite(r.score)&&Number.isFinite(r.dpsError)&&Number.isFinite(r.survivalError)),'Pairs carry the score and both errors.');
+    assert.ok(job.upgrade.jewelryPairs.some(p=>p.scenario===s&&p.parts.every(x=>x.name&&x.slot)));
+    console.log('fight',s,'pairs',pairs.length);
+  }else console.log('fight',s,'pair stage',st.status,st.reason||st.error);
+}

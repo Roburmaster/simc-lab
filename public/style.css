@@ -158,3 +158,12 @@
 #tank-panel.embedded{background:none;border:0;padding:0;margin:0}
 #tank-panel.embedded .panel-heading{margin-bottom:6px}
 #tank-panel.embedded .panel-heading h2{margin:0;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--amber);font-weight:700}
+.tank-reco{margin:22px 0 8px;padding:16px 18px;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:8px;background:#141a25}
+.tank-reco>h3{margin:0 0 6px;font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:var(--amber)}
+.reco-weight{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0}
+.reco-weight label{margin:0;min-width:260px}
+.reco-weight input[type=range]{width:100%}
+.reco-table td,.reco-table th{text-align:left;vertical-align:top;white-space:normal}
+.reco-table td:last-child,.reco-table th:last-child{white-space:nowrap}
+.reco-table td small{display:block}
+.tank-reco{overflow-x:auto}
